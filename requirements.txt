@@ -1,33 +1,4 @@
-bcrypt==2.0.0
-boto==2.38.0
-botocore==1.2.5
-cffi==1.4.2
-constants==0.6.0
-dj-database-url==0.3.0
-Django==1.9.4
-django-pipeline-compass-rubygem==0.1.8
-django-registration-redux==1.2
-django-storages==1.1.8
-docutils==0.12
-enum34==1.0.4
-futures==3.0.3
-gunicorn==19.3.0
-idna==2.0
-ipaddress==1.0.14
-Jinja2==2.8
-jmespath==0.8.0
-MarkupSafe==0.23
-mimeparse==0.1.3
-mistune==0.7.1
-Pillow==3.1.0
-psycopg2==2.6.1
-pyasn1==0.1.9
-pycparser==2.14
-python-dateutil==2.4.2
-pytz==2015.4
-regex==2016.1.10
-requests==2.9.1
-rsa==3.2
-six==1.9.0
-Unidecode==0.4.18
-wheel==0.24.0
+# Python >=3.12, Django 6.1.x — matches modernized django-trusts 1.0.0.dev0.
+# Trusts is not a published PyPI 1.0; pin the identified post-#19 revision.
+Django>=6.1,<6.2
+django-trusts @ git+https://github.com/django-trusts/django-trusts.git@5bd2a585d3806571f95bebf89c2852cac3649d25

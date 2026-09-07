@@ -1,0 +1,15 @@
+[project]
+name = "django-trusts-example"
+version = "0.2.0.dev0"
+description = "Runnable Django example that exercises modernized django-trusts"
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=6.1,<6.2",
+    "django-trusts @ git+https://github.com/django-trusts/django-trusts.git@5bd2a585d3806571f95bebf89c2852cac3649d25",
+]
+
+[project.optional-dependencies]
+test = []
+
+[tool.setuptools.packages.find]
+include = ["example*", "projects*"]

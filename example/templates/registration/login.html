@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<h1>Log in</h1>
+<p class="muted">Demo accounts (password <code>demo</code>): alice, bob, carol, dave.</p>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Log in</button>
+</form>
+<h2>What each user can see after seed</h2>
+<ul>
+    <li><strong>alice</strong> — owner of Private Notes, Shared Roadmap, Public Changelog, and Acme Handbook</li>
+    <li><strong>bob</strong> — read on Shared Roadmap; read on Public Changelog</li>
+    <li><strong>carol</strong> — Acme staff: read Acme Handbook via group + reader role; Public Changelog</li>
+    <li><strong>dave</strong> — own notes; Public Changelog only among Alice's projects</li>
+</ul>
+{% endblock %}
