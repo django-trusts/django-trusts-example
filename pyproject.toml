@@ -5,7 +5,7 @@ description = "Runnable Django example that exercises modernized django-trusts"
 requires-python = ">=3.12"
 dependencies = [
     "Django>=6.1,<6.2",
-    "django-trusts @ git+https://github.com/django-trusts/django-trusts.git@b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20",
+    "django-trusts @ git+https://github.com/django-trusts/django-trusts.git@8916a760fbe849170e88e3969723b317d0360cd1",
     "gunicorn>=23.0.0",
     "PyMySQL[rsa]>=1.2.0",
     "dj-database-url>=2.3.0",
