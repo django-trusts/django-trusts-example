@@ -27,13 +27,50 @@ class DeploySettingsTests(SimpleTestCase):
 
     def test_mysql_database_url_parses_for_dokku(self):
         parsed = dj_database_url.parse(
-            "mysql://demo:s3cret@mysql.internal:3306/trustsexample1"
+            "mysql://demo:s3cret@mysql.internal:3306/example"
         )
         self.assertEqual(parsed["ENGINE"], "django.db.backends.mysql")
-        self.assertEqual(parsed["NAME"], "trustsexample1")
+        self.assertEqual(parsed["NAME"], "example")
         self.assertEqual(parsed["USER"], "demo")
         self.assertEqual(parsed["HOST"], "mysql.internal")
         self.assertEqual(int(parsed["PORT"]), 3306)
+
+    def test_csrf_trusted_origins_default_empty(self):
+        self.assertEqual(settings.CSRF_TRUSTED_ORIGINS, [])
+
+    def test_csrf_trusted_origins_parses_env(self):
+        env = os.environ.copy()
+        env["CSRF_TRUSTED_ORIGINS"] = (
+            "https://your-app.example.com, https://*.example.com"
+        )
+        env["DJANGO_SETTINGS_MODULE"] = "example.settings"
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(REPO_ROOT), env.get("PYTHONPATH", "")]
+        )
+        code = """
+import django
+from django.conf import settings
+
+django.setup()
+print("|".join(settings.CSRF_TRUSTED_ORIGINS))
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"stdout={result.stdout!r}\nstderr={result.stderr!r}",
+        )
+        self.assertEqual(
+            result.stdout.strip(),
+            "https://your-app.example.com|https://*.example.com",
+        )
 
     def test_whitenoise_is_enabled(self):
         self.assertIn(

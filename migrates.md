@@ -71,10 +71,30 @@ Migration-bot checklist:
 - [ ] Create/edit via `UserAdmin.save_related` without selecting `public-readers`.
 - [ ] Do not add an in-Python public-read bypass to list or detail views.
 
+### 4. `CSRF_TRUSTED_ORIGINS` is env-only (no private hostname default)
+
+| | |
+| --- | --- |
+| Previous | `example/settings.py` defaulted `CSRF_TRUSTED_ORIGINS` to a private Dokku hostname when the env var was unset. HTTPS login and other unsafe POSTs on that host worked without operator config. |
+| New | Parse `CSRF_TRUSTED_ORIGINS` from the environment when set; otherwise `[]`. Private hostnames are not a source default. |
+| Replacement | Set the env var on each HTTPS deploy (`dokku config:set your-app CSRF_TRUSTED_ORIGINS=https://your-app.example.com`). Local HTTP `runserver` needs no origin list. |
+| Affected | `example/settings.py`; Dokku/HTTPS deploys; Django login and other unsafe-method POSTs. |
+| Authorization | Unchanged. Trusts `has_perm` / backends are not involved. This is CSRF origin checking only. |
+
+Existing HTTPS deployments that relied on the old default must set `CSRF_TRUSTED_ORIGINS` to their public origin **before** deploying this revision. Do **not** put private hostnames in source defaults.
+
+Migration-bot checklist:
+
+- [ ] Confirm `example/settings.py` has no hard-coded CSRF hostname default.
+- [ ] Set and verify `CSRF_TRUSTED_ORIGINS` via `dokku config` (or equivalent) **before** deploying this revision.
+- [ ] After deploy, confirm an HTTPS login POST succeeds.
+- [ ] Do not put private hostnames in source defaults.
+
 ## Migration-bot summary
 
 - [ ] Keep `AUTHENTICATION_BACKENDS` as `trusts.backends.TrustModelBackend`.
-- [ ] Apply the three example checklists above.
+- [ ] Apply the four example checklists above.
+- [ ] Set and verify `CSRF_TRUSTED_ORIGINS` via `dokku config` (or equivalent) before deploying this revision; then confirm an HTTPS login POST succeeds. Do not put private hostnames in source defaults.
 - [ ] `python manage.py test projects`
 - [ ] `python manage.py migrate --noinput && python manage.py seed_demo`
 - [ ] Do not edit django-trusts `migrates.md` for these example-only changes.

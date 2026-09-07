@@ -25,13 +25,11 @@ ALLOWED_HOSTS = ["*"]
 # Dokku/nginx terminates TLS and forwards the original scheme.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# HTTPS login POST needs this (Django 4+). Comma-separated override via env.
+# HTTPS login POST needs this (Django 4+). Comma-separated via env; empty
+# locally. Dokku HTTPS must set CSRF_TRUSTED_ORIGINS (see README).
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get(
-        "CSRF_TRUSTED_ORIGINS",
-        "https://trustsexample1.cacheca.com,https://*.cacheca.com",
-    ).split(",")
+    for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
     if origin.strip()
 ]
 
