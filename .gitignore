@@ -1,6 +1,11 @@
 /venv
+/.venv
 /static
-db.sqlite3
+/db.sqlite3
 *.pyc
+__pycache__/
+*.egg-info/
 .DS_Store
-
+.coverage
+/htmlcov
+/.pytest_cache

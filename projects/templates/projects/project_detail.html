@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ project.title }}{% endblock %}
+{% block content %}
+<h1>{{ project.title }}</h1>
+<p>{{ project.description|default:"No description." }}</p>
+<p class="muted">
+    Trust {{ project.trust_id }}
+    · settlor {{ project.trust.settlor }}
+    · visibility
+    {% if is_public %}<span class="badge">public</span>{% else %}<span class="badge">private</span>{% endif %}
+</p>
+
+{% if can_change %}
+<p class="actions"><a href="{% url 'project-edit' project.pk %}">Edit project</a></p>
+
+<h2>Change visibility</h2>
+<form method="post" action="{% url 'project-visibility' project.pk %}">
+    {% csrf_token %}
+    {{ visibility_form.as_p }}
+    <button type="submit">Update visibility</button>
+</form>
+
+<h2>Grant access</h2>
+<form method="post" action="{% url 'project-grant' project.pk %}">
+    {% csrf_token %}
+    {{ grant_form.as_p }}
+    <button type="submit">Grant</button>
+</form>
+{% else %}
+<p class="muted">You can read this project but not change it or its grants.</p>
+{% endif %}
+
+<h2>Trustee grants</h2>
+<table>
+    <thead><tr><th>User</th><th>Permission</th>{% if can_change %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+        {% for row in trustees %}
+        <tr>
+            <td>{{ row.entity.username }}</td>
+            <td>{{ row.permission.codename }}</td>
+            {% if can_change %}
+            <td>
+                <form class="inline" method="post" action="{% url 'project-revoke' project.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="user" value="{{ row.entity_id }}">
+                    <button type="submit">Revoke all for {{ row.entity.username }}</button>
+                </form>
+            </td>
+            {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="3">No trustee rows.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+<p class="muted">
+    Organization and public read may also come from groups attached to this trust
+    (not listed as trustee rows).
+</p>
+{% endblock %}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}django-trusts example{% endblock %}</title>
+    <style>
+        :root { font-family: system-ui, sans-serif; line-height: 1.45; color: #1a1a1a; }
+        body { max-width: 52rem; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
+        header { display: flex; justify-content: space-between; gap: 1rem; align-items: center;
+                 border-bottom: 1px solid #ddd; padding-bottom: .6rem; margin-bottom: 1.2rem; }
+        nav a { margin-right: .75rem; }
+        .muted { color: #555; }
+        .flash { background: #eef6ff; border: 1px solid #c5ddf5; padding: .5rem .75rem; margin-bottom: 1rem; }
+        .error { background: #fff3f3; border-color: #f0c2c2; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { text-align: left; border-bottom: 1px solid #eee; padding: .35rem .4rem; vertical-align: top; }
+        form.inline { display: inline; }
+        label { display: block; margin: .5rem 0; }
+        input[type=text], textarea, select { width: 100%; max-width: 28rem; }
+        .actions { margin: 1rem 0; }
+        .badge { font-size: .8rem; background: #eee; padding: .1rem .4rem; border-radius: 3px; }
+        ul.plain { padding-left: 1.1rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="{% url 'project-list' %}">Projects</a>
+            {% if user.is_authenticated %}
+                <a href="{% url 'project-create' %}">New project</a>
+            {% endif %}
+        </nav>
+        <div>
+            {% if user.is_authenticated %}
+                Signed in as <strong>{{ user.username }}</strong>
+                <form class="inline" method="post" action="{% url 'logout' %}">{% csrf_token %}
+                    <button type="submit">Log out</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}">Log in</a>
+            {% endif %}
+        </div>
+    </header>
+    {% if messages %}
+        {% for message in messages %}
+            <div class="flash">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+</body>
+</html>

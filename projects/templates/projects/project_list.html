@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Projects{% endblock %}
+{% block content %}
+<h1>Projects you can read</h1>
+<p class="muted">
+    List membership comes from a QuerySet that JOINs Trusts trustee, group, and role tables.
+    Pagination is applied to that filtered QuerySet. Switch user to confirm another view.
+</p>
+{% if page.object_list %}
+<table>
+    <thead>
+        <tr><th>Project</th><th>Owner (settlor)</th><th>Your change?</th></tr>
+    </thead>
+    <tbody>
+        {% for project in page.object_list %}
+        <tr>
+            <td><a href="{{ project.get_absolute_url }}">{{ project.title }}</a></td>
+            <td>{{ project.trust.settlor }}</td>
+            <td>{% if project.pk in can_edit_ids %}yes{% else %}no{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% if page.has_other_pages %}
+    <p class="actions">
+        {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Previous</a>{% endif %}
+        Page {{ page.number }} of {{ page.paginator.num_pages }}
+        {% if page.has_next %}<a href="?page={{ page.next_page_number }}">Next</a>{% endif %}
+    </p>
+{% endif %}
+{% else %}
+<p>No projects are readable for this user.</p>
+{% endif %}
+<p><a href="{% url 'project-create' %}">Create a project</a></p>
+{% endblock %}
