@@ -3,12 +3,12 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.paginator import Paginator
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils.text import slugify
 
 from trusts.decorators import permission_required, K
-from trusts.models import Trust
 
+from .create import create_owned_project
 from .forms import GrantForm, ProjectForm, VisibilityForm
 from .grants import CHANGE, READ, grant_user, is_public, revoke_user, set_public, trustee_rows
 from .models import Project
@@ -39,21 +39,20 @@ def project_list(request):
 def project_create(request):
     form = ProjectForm(request.POST or None)
     if form.is_valid():
-        title = form.cleaned_data["title"]
-        slug = slugify(title)
-        trust = Trust(
-            settlor=request.user,
-            title=f"project:{slug}",
-            trust=Trust.objects.get_root(),
-        )
-        trust.save()
-        project = form.save(commit=False)
-        project.trust = trust
-        project.slug = slug
-        project.save()
-        grant_user(project, request.user, READ, CHANGE)
-        messages.success(request, f"Created {project.title}. You have read and change.")
-        return redirect(project)
+        try:
+            project = create_owned_project(
+                request.user,
+                form.cleaned_data["title"],
+                form.cleaned_data.get("description", ""),
+            )
+        except IntegrityError:
+            form.add_error(
+                "title",
+                "Could not create a unique project identifier. Try a different title.",
+            )
+        else:
+            messages.success(request, f"Created {project.title}. You have read and change.")
+            return redirect(project)
     return render(request, "projects/project_form.html", {"form": form, "mode": "create"})
 
 

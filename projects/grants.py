@@ -6,8 +6,10 @@ an unmerged trusts checkout and are not in modernized master. These wrappers
 write TrustUserPermission and Trust.groups rows only.
 """
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.db.utils import OperationalError, ProgrammingError
 
 from trusts.models import TrustUserPermission
 
@@ -46,6 +48,28 @@ def revoke_user(project, user, *codenames):
 def public_readers_group():
     group, _ = Group.objects.get_or_create(name=PUBLIC_GROUP_NAME)
     group.permissions.add(project_permission(READ))
+    return group
+
+
+def enroll_in_public_readers(user):
+    """Attach one account to public-readers so Trusts group grants apply."""
+    if user is None or not getattr(user, "pk", None):
+        return
+    try:
+        public_readers_group().user_set.add(user)
+    except (ProgrammingError, OperationalError, Permission.DoesNotExist, ContentType.DoesNotExist):
+        # Migrations / early User inserts before Project permissions exist.
+        return
+
+
+def sync_public_readers():
+    """Enroll every existing user. Complements the post_save signal for new ones."""
+    try:
+        group = public_readers_group()
+    except (ProgrammingError, OperationalError, Permission.DoesNotExist, ContentType.DoesNotExist):
+        return None
+    User = get_user_model()
+    group.user_set.add(*User.objects.all())
     return group
 
 

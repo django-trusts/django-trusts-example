@@ -13,8 +13,8 @@ from .grants import (
     PUBLIC_GROUP_NAME,
     READ,
     grant_user,
-    public_readers_group,
     set_public,
+    sync_public_readers,
 )
 from .models import Project
 
@@ -68,9 +68,7 @@ def seed_demo():
     users = {name: ensure_user(name) for name in DEMO_USERS}
     alice, bob, carol, dave = (users[n] for n in DEMO_USERS)
 
-    public_group = public_readers_group()
-    for user in users.values():
-        user.groups.add(public_group)
+    public_group = sync_public_readers()
 
     acme_group, _ = Group.objects.get_or_create(name=ACME_GROUP)
     acme_group.user_set.add(carol)

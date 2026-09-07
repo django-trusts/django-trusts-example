@@ -1,15 +1,18 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
+from django.db import IntegrityError
 from django.db.models import QuerySet
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from trusts.models import Trust, TrustUserPermission
 
 from .demo import seed_demo
-from .grants import CHANGE, READ, grant_user, is_public, set_public
+from .grants import CHANGE, PUBLIC_GROUP_NAME, READ, grant_user, is_public, set_public
 from .models import Project
-from .query import readable_projects
+from .query import editable_projects, readable_projects
 
 User = get_user_model()
 
@@ -166,6 +169,46 @@ class SeededTrustsDemoTests(TestCase):
             ).exists()
         )
 
+    def test_nonseeded_user_reads_public_via_group(self):
+        changelog = self.projects["public-changelog"]
+        notes = self.projects["alice-private-notes"]
+        erin = User.objects.create_user("erin", "erin@example.com", "demo")
+        self.assertTrue(erin.groups.filter(name=PUBLIC_GROUP_NAME).exists())
+        self.assertTrue(erin.has_perm("projects.read_project", changelog))
+        self.assertIn(changelog.pk, readable_projects(erin).values_list("pk", flat=True))
+        self.assertFalse(erin.has_perm("projects.read_project", notes))
+        self.assertNotIn(notes.pk, readable_projects(erin).values_list("pk", flat=True))
+        self.client.force_login(erin)
+        response = self.client.get(reverse("project-list"))
+        self.assertContains(response, "Public Changelog")
+        self.assertNotContains(response, "Alice Private Notes")
+
+    def test_sync_enrolls_existing_user_missing_the_group(self):
+        from .grants import sync_public_readers
+
+        changelog = self.projects["public-changelog"]
+        erin = User.objects.create_user("erin-resync", "erin-resync@example.com", "demo")
+        erin.groups.remove(*erin.groups.filter(name=PUBLIC_GROUP_NAME))
+        erin = User.objects.get(pk=erin.pk)
+        self.assertFalse(erin.has_perm("projects.read_project", changelog))
+        sync_public_readers()
+        erin = User.objects.get(pk=erin.pk)
+        self.assertTrue(erin.groups.filter(name=PUBLIC_GROUP_NAME).exists())
+        self.assertTrue(erin.has_perm("projects.read_project", changelog))
+
+    def test_inactive_user_list_matches_has_perm(self):
+        bob = self.users["bob"]
+        shared = self.projects["shared-roadmap"]
+        self.assertTrue(bob.has_perm("projects.read_project", shared))
+        self.assertTrue(readable_projects(bob).filter(pk=shared.pk).exists())
+
+        bob.is_active = False
+        bob.save()
+        bob = User.objects.get(pk=bob.pk)
+        self.assertFalse(bob.has_perm("projects.read_project", shared))
+        self.assertFalse(readable_projects(bob).filter(pk=shared.pk).exists())
+        self.assertFalse(editable_projects(bob).filter(pk=shared.pk).exists())
+
 
 class PaginationAndQueryTests(TestCase):
     def setUp(self):
@@ -232,3 +275,77 @@ class PaginationAndQueryTests(TestCase):
         # public read is a group row, not a condition code.
         self.assertIsNone(Content.get_permission_condition_func(Project, "own"))
         self.assertFalse(dave.has_perm("projects.change_project", changelog))
+
+
+class ExistingUserBeforeSeedTests(TestCase):
+    def test_user_created_before_seed_reads_public(self):
+        frank = User.objects.create_user("frank", "frank@example.com", "demo")
+        seed_demo()
+        frank = User.objects.get(username="frank")
+        changelog = Project.objects.get(slug="public-changelog")
+        self.assertTrue(frank.groups.filter(name=PUBLIC_GROUP_NAME).exists())
+        self.assertTrue(frank.has_perm("projects.read_project", changelog))
+        self.assertIn(changelog.pk, readable_projects(frank).values_list("pk", flat=True))
+
+
+class CreateCollisionTests(TransactionTestCase):
+    def setUp(self):
+        seed_demo()
+        self.bob = User.objects.get(username="bob")
+
+    def test_duplicate_title_resolves_slug_without_500(self):
+        trusts_before = Trust.objects.count()
+        projects_before = Project.objects.count()
+        self.client.force_login(self.bob)
+        response = self.client.post(
+            reverse("project-create"),
+            {"title": "Alice Private Notes", "description": "bob copy"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Trust.objects.count(), trusts_before + 1)
+        self.assertEqual(Project.objects.count(), projects_before + 1)
+        created = Project.objects.get(description="bob copy")
+        self.assertEqual(created.title, "Alice Private Notes")
+        self.assertNotEqual(created.slug, "alice-private-notes")
+        self.assertTrue(created.slug.startswith("alice-private-notes"))
+        self.assertRedirects(response, created.get_absolute_url())
+        bob = User.objects.get(username="bob")
+        self.assertTrue(bob.has_perm("projects.read_project", created))
+        self.assertTrue(bob.has_perm("projects.change_project", created))
+
+    def test_titles_that_normalize_to_the_same_slug(self):
+        self.client.force_login(self.bob)
+        response = self.client.post(
+            reverse("project-create"),
+            {"title": "alice  private notes", "description": "normalized"},
+        )
+        self.assertEqual(response.status_code, 302)
+        created = Project.objects.get(description="normalized")
+        self.assertEqual(created.slug, "alice-private-notes-2")
+        self.assertNotEqual(created.slug, "alice-private-notes")
+
+    def test_failed_create_rolls_back_trust(self):
+        trusts_before = Trust.objects.count()
+        projects_before = Project.objects.count()
+        self.client.force_login(self.bob)
+        with patch("projects.create.Project.save", side_effect=IntegrityError("forced")):
+            response = self.client.post(
+                reverse("project-create"),
+                {"title": "Unique Enough Title", "description": "should roll back"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Could not create a unique project identifier")
+        self.assertEqual(Trust.objects.count(), trusts_before)
+        self.assertEqual(Project.objects.count(), projects_before)
+        self.assertFalse(Project.objects.filter(title="Unique Enough Title").exists())
+
+    def test_empty_slug_title_is_rejected(self):
+        trusts_before = Trust.objects.count()
+        self.client.force_login(self.bob)
+        response = self.client.post(
+            reverse("project-create"),
+            {"title": "!!!", "description": "no slug"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "letters or numbers")
+        self.assertEqual(Trust.objects.count(), trusts_before)

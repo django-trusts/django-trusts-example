@@ -31,7 +31,9 @@ does not pretend they exist.
 - Organization membership as Django `Group` attached to a trust, with the
   `reader` role materialized by `update_roles_permissions` (role path).
 - Public read as the `public-readers` group attached to that project's trust
-  (group-permission path). Same tables `has_perm` reads.
+  (group-permission path). Same tables `has_perm` reads. Existing accounts
+  are synced into the group at seed; new accounts are enrolled by a
+  `post_save` signal. That is still a group row, not a Python allow-list.
 - View guards via `trusts.decorators.permission_required` and `K()`.
 - Cross-organization isolation: Dave's notes are on Dave's trust; Alice's
   grants do not leak.
@@ -42,11 +44,14 @@ does not pretend they exist.
   `has_perm(user, perm, queryset)` (the queryset form is all-must-match, not
   a filter). There is no supported "objects this user may see" manager.
   `projects.query.readable_projects` is application SQL against Trusts
-  tables. Pagination wraps that QuerySet.
+  tables. Pagination wraps that QuerySet. The helper also returns empty for
+  inactive users so it matches `User.has_perm` (which denies `is_active=False`).
 - **Grant / revoke / visibility helpers.** Thin writes to Trusts rows. Not
   core API.
-- **Create flow.** Choose a trust title, set `Project.trust` before first
-  save, then grant the creator. Trusts does not auto-grant the settlor.
+- **Create flow.** Allocate a unique slug, then create trust + project +
+  owner grants in one transaction. Trusts does not auto-grant the settlor.
+- **Public-readers enrollment.** Application signal / seed sync writes the
+  group membership Trusts already evaluates. Not a per-request predicate.
 - **UI and seed.** Forms, templates, `seed_demo`, demo passwords.
 
 ## Model limitations (not papered over)
@@ -60,7 +65,10 @@ does not pretend they exist.
   trust with any future Acme content — that is the intended organization
   pattern and also the limitation.
 - Django `User.has_perm` short-circuits for `is_superuser`. Superusers are
-  not a Trusts proof. Seed users are ordinary users.
+  not a Trusts proof. Seed users are ordinary users. The list helper does
+  **not** special-case superusers; a superuser may see a narrower list than
+  `has_perm` would allow. That mismatch is documented, not treated as
+  Trusts validation.
 - `:own` on `Trust` is a registered **Python predicate**
   (`lambda u, p, o: u == o.settlor`). This example does not use `:own` for
   list membership or as evidence that permission declarations evaluate in a

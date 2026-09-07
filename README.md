@@ -37,8 +37,9 @@ Open http://127.0.0.1:8000/ and log in. Every seeded password is `demo`.
 1. **Create an object** — as alice (or bob), *New project*. The creator gets
    read and change trustee rows on a new trust.
 2. **Change visibility** — on a project you can change, toggle public. Public
-   attaches the `public-readers` group to that trust. Log in as dave to see
-   the list change.
+   attaches the `public-readers` group to that trust. Every signed-in account
+   is enrolled in that group (seeded users and accounts created later). Log
+   in as dave — or create another user — to see the list change.
 3. **Grant / revoke** — grant bob or dave read (or read+change), then revoke.
 4. **Another user's view** — log out and in as bob, carol, or dave. The home
    list is already filtered.

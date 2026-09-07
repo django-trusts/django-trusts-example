@@ -18,7 +18,14 @@ from .models import Project
 
 
 def projects_with_perm(user, codename) -> QuerySet[Project]:
-    if user is None or isinstance(user, AnonymousUser) or not user.is_authenticated:
+    # Match User.has_perm: anonymous and inactive principals are denied.
+    # Superuser short-circuit on has_perm is a Django limitation (documented).
+    if (
+        user is None
+        or isinstance(user, AnonymousUser)
+        or not getattr(user, "is_authenticated", False)
+        or not getattr(user, "is_active", False)
+    ):
         return Project.objects.none()
 
     perm = project_permission(codename)
