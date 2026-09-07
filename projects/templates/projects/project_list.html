@@ -3,7 +3,8 @@
 {% block content %}
 <h1>Projects you can read</h1>
 <p class="muted">
-    List membership comes from a QuerySet that JOINs Trusts trustee, group, and role tables.
+    List membership comes from a QuerySet that filters Trusts trustee rows and
+    the TrustGroup local/global permission intersection in SQL.
     Pagination is applied to that filtered QuerySet. Switch user to confirm another view.
 </p>
 {% if page.object_list %}

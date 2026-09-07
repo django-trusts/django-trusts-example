@@ -1,7 +1,7 @@
 # Python >=3.12, Django 6.1.x — matches modernized django-trusts 1.0.0.dev0.
-# Trusts is not a published PyPI 1.0; pin the identified post-#19 revision.
+# Trusts is not a published PyPI 1.0; pin the post-#24 (TrustGroup) merge on master.
 Django>=6.1,<6.2
-django-trusts @ git+https://github.com/django-trusts/django-trusts.git@5bd2a585d3806571f95bebf89c2852cac3649d25
+django-trusts @ git+https://github.com/django-trusts/django-trusts.git@b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20
 gunicorn>=23.0.0
 # Pure-Python driver: mysqlclient has no Linux wheels and needs client headers
 # the stock Herokuish Python buildpack does not provide.

@@ -98,3 +98,109 @@ Migration-bot checklist:
 - [ ] `python manage.py test projects`
 - [ ] `python manage.py migrate --noinput && python manage.py seed_demo`
 - [ ] Do not edit django-trusts `migrates.md` for these example-only changes.
+
+# Per-Trust group rights in project settings (issue #5)
+
+This record covers the example app after django-trusts **#23 / PR #24**
+(`b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20`). Core `migrates.md` on that
+revision is the library contract. This file records **example** old/new
+behavior only.
+
+Authorization still goes through `TrustModelBackend` / Trusts tables. Group
+access is now the fail-closed intersection:
+
+```
+effective = member ∧ TrustGroup(trust, group) ∧ local TrustGroup.permissions
+            ∧ global Group.permissions (roles are ceiling only)
+```
+
+## Pin
+
+| | |
+| --- | --- |
+| Previous | `django-trusts` at `5bd2a585d3806571f95bebf89c2852cac3649d25` (post-#19). |
+| New | `django-trusts` at `b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20` (PR #24 merge on master). |
+| Replacement | Same git URL, new SHA in `requirements.txt` / `pyproject.toml`. |
+| Affected | `migrate` applies `trusts.0002_trustgroup`. Existing `Trust.groups` rows become `TrustGroup` associations with **empty** local grants. |
+| Authorization | Association without local tuples grants nothing until `seed_demo` (or an operator) writes `TrustGroupPermission` rows. Do **not** run `grandfather_trust_group_permissions` unless you deliberately want former implicit group access. |
+
+## Changes (example)
+
+### 5. List filter uses core `permitted()` (TrustGroup intersection)
+
+| | |
+| --- | --- |
+| Previous | `projects.query.projects_with_perm` JOINed `trust__groups__permissions` and `trust__groups__roles__permissions`. That treated the global ceiling (and role) as a Trust grant. |
+| New | `Project.objects.permitted(codename, user)` via `trusts.query.trust_grant_q`. Group-derived rows require the local/global intersection on the same TrustGroup. Inactive/anonymous still yield an empty QuerySet. Pagination still wraps that QuerySet. |
+| Replacement | Same helper names: `readable_projects` / `editable_projects`. |
+| Affected | Project list, `can_edit_ids`, MySQL smoke titles. |
+| Authorization | List membership and `has_perm` / direct 403 agree on the supported relational paths, including fail-closed partial group setup. |
+
+Migration-bot checklist:
+
+- [ ] Do not restore a Python `has_perm` loop or a JOIN that omits `TrustGroup.permissions`.
+- [ ] Paginate `readable_projects(user)`, never `Project.objects.all()`.
+- [ ] Re-run list-vs-direct tests after the Trusts pin bump.
+
+### 6. Public visibility associates **and** enables local read
+
+| | |
+| --- | --- |
+| Previous | `set_public` called `trust.groups.add(public-readers)`. With implicit group grants that was enough. |
+| New | `trust.grant_group_permission(public-readers, read_project)` (associates + local read). Detach still `groups.remove`. `Group.permissions` on public-readers remains the global ceiling (`read_project` only). |
+| Replacement | Same `set_public` / visibility form. Help text states association alone does not grant access. |
+| Affected | Public Changelog seed, visibility POST, users created after seed. |
+| Authorization | A public-readers association with an empty local set grants nothing. Seed and the visibility form always write the local read tuple when making public. |
+
+Migration-bot checklist:
+
+- [ ] After migrate, confirm public projects have a `TrustGroupPermission` for `read_project`.
+- [ ] Do not treat `trust.groups.add(public-readers)` as a grant.
+
+### 7. Project settings distinguish association, local rights, and ceiling
+
+| | |
+| --- | --- |
+| Previous | No team UI. Organization access was `Trust.groups.add(acme-staff)` plus the `reader` role (implicit grant). |
+| New | Settings show (1) associated teams, (2) local TrustGroup checkboxes limited to this project's grantable permissions **inside the group's global ceiling**, (3) the ceiling (and contributing roles) as read-only. Associate POSTs `associate_group_with_trust` with no permissions. Local POSTs `set_trust_group_permissions`. Unknown / cross-project IDs and permissions outside the ceiling raise `AuthorizationDenied` and **do not mutate**. Public-readers stays on the visibility form. |
+| Replacement | New routes: `project-associate-team`, `project-disassociate-team`, `project-team-permissions`. |
+| Affected | Project detail template; change-gated POSTs. Read-only users see the table and get 403 on mutate URLs. |
+| Authorization | Partial setup (associated, no local rights) displays “grants nothing” and `has_perm` is false. Removing a ceiling permission revokes it on every associated project even if it remains selected locally. Removing a local permission affects only that project. |
+
+Migration-bot checklist:
+
+- [ ] Gate team POSTs on `projects.change_project` (decorator **and** the authorization helpers).
+- [ ] Catch `AuthorizationDenied`; do not write TrustGroup rows after a rejected submit.
+- [ ] Only render ceiling-subset checkboxes; still reject extra submitted codes/PKs server-side.
+- [ ] Do not call `refuse_group_permission_write` / write `Group.permissions` from project forms.
+
+### 8. Seed: explicit local grants; same team, different projects
+
+| | |
+| --- | --- |
+| Previous | `acme-staff` + `reader` role on `org:acme`. Carol read Acme Handbook implicitly. Four Alice-owned demo projects. |
+| New | `acme-staff` uses the **editor** role as the global ceiling (read + change). Acme Handbook gets local **read** only. New **Acme Playbook** (own trust) gets local **read and change**. `seed_demo` writes those `TrustGroupPermission` rows; it does not run `grandfather_trust_group_permissions`. |
+| Replacement | Same command: `python manage.py seed_demo`. Idempotent. |
+| Affected | Carol's list (Handbook + Playbook + public Changelog). Alice's list includes Playbook. README demo table. |
+| Authorization | Existing seeded users keep their intended access after the pin bump **because seed writes local tuples**. A migrate without re-seed would leave public-readers / acme-staff associated and grant nothing. |
+
+Migration-bot checklist:
+
+- [ ] `migrate` then `seed_demo` (not grandfather) for this demo.
+- [ ] Confirm carol: `change` on Playbook, `read` only on Handbook.
+- [ ] Confirm dave still reads Public Changelog and not private notes.
+
+## Deployment / migration checklist (example)
+
+Do **not** Dokku-deploy this revision until the example PR is reviewed.
+
+- [ ] Install Trusts at `b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20`.
+- [ ] `python manage.py migrate --noinput` (applies `trusts.0002_trustgroup`).
+- [ ] Expect existing group associations to grant **nothing** until local tuples exist.
+- [ ] Do **not** run `grandfather_trust_group_permissions` for this demo.
+- [ ] `python manage.py seed_demo` so public-readers and acme-staff get explicit local grants.
+- [ ] `python manage.py test projects`
+- [ ] Keep `AUTHENTICATION_BACKENDS` as `trusts.backends.TrustModelBackend`.
+- [ ] Set `CSRF_TRUSTED_ORIGINS` on HTTPS deploys (unchanged; still no private hostname defaults).
+- [ ] When an operator later deploys: migrate, seed once if the database is new; on an already-seeded Dokku app, re-run `seed_demo` so local TrustGroup rows exist (the command is idempotent). Do not put `seed_demo` on every release.
+
