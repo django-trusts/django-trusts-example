@@ -2,7 +2,8 @@ from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import QuerySet
@@ -10,10 +11,19 @@ from django.forms import modelform_factory
 from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
-from trusts.models import Trust, TrustUserPermission
+from trusts.models import Role, Trust, TrustGroup, TrustGroupPermission, TrustUserPermission
 
 from .demo import seed_demo
-from .grants import CHANGE, PUBLIC_GROUP_NAME, READ, grant_user, is_public, set_public
+from .grants import (
+    CHANGE,
+    PUBLIC_GROUP_NAME,
+    READ,
+    grant_user,
+    is_public,
+    project_permission,
+    public_readers_group,
+    set_public,
+)
 from .models import Project
 from .query import editable_projects, readable_projects
 
@@ -31,15 +41,23 @@ class SeededTrustsDemoTests(TestCase):
 
     def test_seeded_users_groups_and_owned_objects(self):
         self.assertEqual(set(self.users), {"alice", "bob", "carol", "dave"})
-        self.assertGreaterEqual(Project.objects.count(), 5)
+        self.assertGreaterEqual(Project.objects.count(), 7)
         self.assertTrue(Trust.objects.filter(title="org:acme").exists())
+        self.assertTrue(Trust.objects.filter(title="project:acme-playbook").exists())
         self.assertTrue(self.users["carol"].groups.filter(name="acme-staff").exists())
+        handbook = self.projects["acme-handbook"]
+        appendix = self.projects["acme-appendix"]
+        self.assertEqual(handbook.trust_id, appendix.trust_id)
+        self.assertEqual(handbook.trust.title, "org:acme")
+        self.assertNotEqual(self.projects["acme-playbook"].trust_id, handbook.trust_id)
 
     def test_seeded_readable_titles(self):
         self.assertEqual(
             self._titles(self.users["alice"]),
             [
+                "Acme Appendix",
                 "Acme Handbook",
+                "Acme Playbook",
                 "Alice Private Notes",
                 "Public Changelog",
                 "Shared Roadmap",
@@ -51,7 +69,7 @@ class SeededTrustsDemoTests(TestCase):
         )
         self.assertEqual(
             self._titles(self.users["carol"]),
-            ["Acme Handbook", "Public Changelog"],
+            ["Acme Appendix", "Acme Handbook", "Acme Playbook", "Public Changelog"],
         )
         self.assertEqual(
             self._titles(self.users["dave"]),
@@ -83,6 +101,8 @@ class SeededTrustsDemoTests(TestCase):
         self.assertContains(response, "Public Changelog")
         self.assertNotContains(response, "Alice Private Notes")
         self.assertNotContains(response, "Acme Handbook")
+        self.assertNotContains(response, "Acme Appendix")
+        self.assertNotContains(response, "Acme Playbook")
         self.assertNotContains(response, "Shared Roadmap")
 
     def test_create_object_grants_owner_read_and_change(self):
@@ -230,6 +250,10 @@ class PaginationAndQueryTests(TestCase):
         self.assertIsInstance(qs, QuerySet)
         sql = str(qs.query).lower()
         self.assertIn("trusts_trustuserpermission", sql)
+        self.assertTrue(
+            "trustgroup" in sql or "trusts_trust_groups" in sql,
+            f"list filter must include TrustGroup intersection SQL, got: {sql}",
+        )
         self.assertNotIn(":own", sql)
         page = Paginator(qs, 2).page(1)
         self.assertTrue(all(self.alice.has_perm("projects.read_project", obj) for obj in page))
@@ -410,3 +434,406 @@ class PublicReadersFormAndAdminTests(TestCase):
         group = Group.objects.get(name=PUBLIC_GROUP_NAME)
         group.user_set.remove(user)
         self._assert_public_read(user)
+
+
+class TrustGroupProjectSettingsTests(TestCase):
+    def setUp(self):
+        self.data = seed_demo()
+        self.users = self.data["users"]
+        self.projects = self.data["projects"]
+        self.acme = Group.objects.get(name="acme-staff")
+        self.handbook = self.projects["acme-handbook"]
+        self.playbook = self.projects["acme-playbook"]
+        self.appendix = self.projects["acme-appendix"]
+        self.notes = self.projects["alice-private-notes"]
+        self.shared = self.projects["shared-roadmap"]
+        self.changelog = self.projects["public-changelog"]
+
+    def _reload(self, user):
+        return User.objects.get(pk=user.pk)
+
+    def test_association_only_public_readers_is_not_public(self):
+        dave = self.users["dave"]
+        group = public_readers_group()
+        self.notes.trust.groups.add(group)
+        self.assertTrue(
+            TrustGroup.objects.filter(trust=self.notes.trust, group=group).exists()
+        )
+        self.assertFalse(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.notes.trust, trustgroup__group=group
+            ).exists()
+        )
+        self.assertFalse(is_public(self.notes))
+        dave = self._reload(dave)
+        self.assertFalse(dave.has_perm("projects.read_project", self.notes))
+        self.assertNotIn(self.notes.pk, readable_projects(dave).values_list("pk", flat=True))
+
+        self.client.force_login(self.users["alice"])
+        response = self.client.get(self.notes.get_absolute_url())
+        self.assertContains(response, '<span class="badge">private</span>', html=True)
+        self.assertNotContains(response, '<span class="badge">public</span>', html=True)
+        self.assertContains(response, "Associated — grants nothing until local rights are enabled")
+        self.assertNotContains(response, 'id="id_is_public" checked')
+        self.assertFalse(response.context["is_public"])
+        self.assertFalse(response.context["visibility_form"].initial["is_public"])
+
+        public = public_readers_group()
+        self.assertTrue(is_public(self.changelog))
+        public.permissions.remove(project_permission(READ))
+        self.assertTrue(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.changelog.trust,
+                trustgroup__group=public,
+                permission=project_permission(READ),
+            ).exists()
+        )
+        self.assertFalse(is_public(self.changelog))
+        dave = self._reload(dave)
+        self.assertFalse(dave.has_perm("projects.read_project", self.changelog))
+
+    def test_same_team_change_on_a_read_on_b(self):
+        carol = self.users["carol"]
+        self.assertTrue(carol.has_perm("projects.read_project", self.handbook))
+        self.assertFalse(carol.has_perm("projects.change_project", self.handbook))
+        self.assertTrue(carol.has_perm("projects.read_project", self.playbook))
+        self.assertTrue(carol.has_perm("projects.change_project", self.playbook))
+        self.assertIn(self.playbook.pk, editable_projects(carol).values_list("pk", flat=True))
+        self.assertNotIn(self.handbook.pk, editable_projects(carol).values_list("pk", flat=True))
+        self.assertEqual(self.appendix.trust_id, self.handbook.trust_id)
+        self.assertNotEqual(self.playbook.trust_id, self.handbook.trust_id)
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+        self.assertFalse(carol.has_perm("projects.change_project", self.appendix))
+
+    def test_detail_distinguishes_association_local_and_ceiling(self):
+        self.client.force_login(self.users["alice"])
+        handbook = self.client.get(self.handbook.get_absolute_url())
+        self.assertContains(handbook, "Global ceiling")
+        self.assertContains(handbook, "Local rights for this Trust")
+        self.assertContains(handbook, "Acme Appendix")
+        self.assertContains(handbook, "acme-staff")
+        self.assertContains(handbook, "editor")
+        self.assertContains(handbook, "does <strong>not</strong> grant access")
+        self.assertNotContains(
+            handbook, "Associated — grants nothing until local rights are enabled"
+        )
+
+        notes = self.client.get(self.notes.get_absolute_url())
+        self.assertContains(notes, "Associate without granting access")
+        self.assertContains(notes, "This only attaches the team to the Trust")
+
+    def test_newly_associated_team_grants_nothing_until_local_rights(self):
+        carol = self.users["carol"]
+        self.assertFalse(carol.has_perm("projects.read_project", self.notes))
+        self.client.force_login(self.users["alice"])
+        response = self.client.post(
+            reverse("project-associate-team", kwargs={"pk": self.notes.pk}),
+            {"group": self.acme.pk},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, self.notes.get_absolute_url())
+        self.assertTrue(
+            TrustGroup.objects.filter(trust=self.notes.trust, group=self.acme).exists()
+        )
+        self.assertFalse(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.notes.trust, trustgroup__group=self.acme
+            ).exists()
+        )
+        carol = self._reload(carol)
+        self.assertFalse(carol.has_perm("projects.read_project", self.notes))
+        self.assertNotIn(self.notes.pk, readable_projects(carol).values_list("pk", flat=True))
+
+        detail = self.client.get(self.notes.get_absolute_url())
+        self.assertContains(detail, "Associated — grants nothing until local rights are enabled")
+        self.assertContains(detail, "No access granted until local rights are enabled")
+
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.notes.pk}),
+            {"group": self.acme.pk, "permissions": [READ]},
+        )
+        carol = self._reload(carol)
+        self.assertTrue(carol.has_perm("projects.read_project", self.notes))
+        self.assertFalse(carol.has_perm("projects.change_project", self.notes))
+        self.assertIn(self.notes.pk, readable_projects(carol).values_list("pk", flat=True))
+
+    def test_removing_global_ceiling_revokes_everywhere_even_if_local_remains(self):
+        local_change = TrustGroupPermission.objects.filter(
+            trustgroup__trust=self.playbook.trust,
+            trustgroup__group=self.acme,
+            permission=project_permission(CHANGE),
+        )
+        self.assertTrue(local_change.exists())
+        Role.objects.get(name="editor").groups.remove(self.acme)
+        Role.objects.get(name="reader").groups.add(self.acme)
+        carol = self._reload(self.users["carol"])
+        self.assertTrue(local_change.exists())
+        self.assertTrue(carol.has_perm("projects.read_project", self.playbook))
+        self.assertFalse(carol.has_perm("projects.change_project", self.playbook))
+        self.assertTrue(carol.has_perm("projects.read_project", self.handbook))
+        self.assertFalse(carol.has_perm("projects.change_project", self.handbook))
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+        self.assertFalse(carol.has_perm("projects.change_project", self.appendix))
+        self.assertNotIn(self.playbook.pk, editable_projects(carol).values_list("pk", flat=True))
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+        self.assertFalse(carol.has_perm("projects.change_project", self.appendix))
+
+        self.client.force_login(self.users["alice"])
+        detail = self.client.get(self.playbook.get_absolute_url())
+        self.assertContains(detail, "outside the current ceiling")
+
+    def test_removing_local_permission_does_not_affect_another_trust(self):
+        self.client.force_login(self.users["alice"])
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.playbook.pk}),
+            {"group": self.acme.pk, "permissions": [READ]},
+        )
+        carol = self._reload(self.users["carol"])
+        self.assertTrue(carol.has_perm("projects.read_project", self.playbook))
+        self.assertFalse(carol.has_perm("projects.change_project", self.playbook))
+        self.assertTrue(carol.has_perm("projects.read_project", self.handbook))
+        self.assertFalse(carol.has_perm("projects.change_project", self.handbook))
+        self.assertTrue(
+            TrustGroup.objects.filter(trust=self.playbook.trust, group=self.acme).exists()
+        )
+        self.assertTrue(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.handbook.trust,
+                trustgroup__group=self.acme,
+                permission=project_permission(READ),
+            ).exists()
+        )
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+
+    def test_shared_trust_local_rights_apply_to_all_projects_on_the_trust(self):
+        self.assertEqual(self.appendix.trust_id, self.handbook.trust_id)
+        carol = self.users["carol"]
+        dave = self.users["dave"]
+        self.client.force_login(self.users["alice"])
+        handbook_page = self.client.get(self.handbook.get_absolute_url())
+        self.assertContains(handbook_page, "this project's Trust")
+        self.assertContains(handbook_page, "Remove team from this Trust")
+        self.assertContains(handbook_page, "Acme Appendix")
+
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.handbook.pk}),
+            {"group": self.acme.pk},
+        )
+        carol = self._reload(carol)
+        self.assertFalse(carol.has_perm("projects.read_project", self.handbook))
+        self.assertFalse(carol.has_perm("projects.read_project", self.appendix))
+        self.assertTrue(carol.has_perm("projects.read_project", self.playbook))
+        self.assertTrue(
+            TrustGroup.objects.filter(trust=self.handbook.trust, group=self.acme).exists()
+        )
+
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.appendix.pk}),
+            {"group": self.acme.pk, "permissions": [READ]},
+        )
+        carol = self._reload(carol)
+        self.assertTrue(carol.has_perm("projects.read_project", self.handbook))
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+
+        self.client.post(
+            reverse("project-visibility", kwargs={"pk": self.handbook.pk}),
+            {"is_public": "on"},
+        )
+        self.assertTrue(is_public(self.handbook))
+        self.assertTrue(is_public(self.appendix))
+        dave = self._reload(dave)
+        self.assertTrue(dave.has_perm("projects.read_project", self.handbook))
+        self.assertTrue(dave.has_perm("projects.read_project", self.appendix))
+        self.assertFalse(dave.has_perm("projects.read_project", self.playbook))
+
+    def test_unauthorized_and_readonly_cannot_change_teams(self):
+        self.client.force_login(self.users["bob"])
+        for name in (
+            "project-associate-team",
+            "project-disassociate-team",
+            "project-team-permissions",
+        ):
+            response = self.client.post(
+                reverse(name, kwargs={"pk": self.notes.pk}),
+                {"group": self.acme.pk, "permissions": [CHANGE]},
+            )
+            self.assertEqual(response.status_code, 403)
+        self.assertFalse(
+            TrustGroup.objects.filter(trust=self.notes.trust, group=self.acme).exists()
+        )
+
+        self.client.force_login(self.users["carol"])
+        before = list(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.handbook.trust, trustgroup__group=self.acme
+            ).values_list("permission__codename", flat=True)
+        )
+        for name in (
+            "project-associate-team",
+            "project-disassociate-team",
+            "project-team-permissions",
+        ):
+            response = self.client.post(
+                reverse(name, kwargs={"pk": self.handbook.pk}),
+                {"group": self.acme.pk, "permissions": [CHANGE]},
+            )
+            self.assertEqual(response.status_code, 403)
+        after = list(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.handbook.trust, trustgroup__group=self.acme
+            ).values_list("permission__codename", flat=True)
+        )
+        self.assertEqual(sorted(before), sorted(after))
+        self.assertEqual(
+            self.client.get(reverse("project-edit", kwargs={"pk": self.handbook.pk})).status_code,
+            403,
+        )
+
+        self.client.force_login(self.users["bob"])
+        self.assertEqual(
+            self.client.post(
+                reverse("project-team-permissions", kwargs={"pk": self.shared.pk}),
+                {"group": self.acme.pk, "permissions": [READ]},
+            ).status_code,
+            403,
+        )
+
+    def test_unknown_and_cross_project_ids_fail_closed(self):
+        self.client.force_login(self.users["alice"])
+        handbook_local = set(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.handbook.trust, trustgroup__group=self.acme
+            ).values_list("permission_id", flat=True)
+        )
+        notes_groups_before = set(
+            TrustGroup.objects.filter(trust=self.notes.trust).values_list("group_id", flat=True)
+        )
+
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.notes.pk}),
+            {"group": self.acme.pk, "permissions": [READ]},
+        )
+        self.assertFalse(
+            TrustGroup.objects.filter(trust=self.notes.trust, group=self.acme).exists()
+        )
+
+        self.client.post(
+            reverse("project-disassociate-team", kwargs={"pk": self.notes.pk}),
+            {"group": self.acme.pk},
+        )
+        self.assertTrue(
+            TrustGroup.objects.filter(trust=self.handbook.trust, group=self.acme).exists()
+        )
+
+        self.client.post(
+            reverse("project-associate-team", kwargs={"pk": self.notes.pk}),
+            {"group": 999999},
+        )
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.playbook.pk}),
+            {"group": 999999, "permissions": [READ]},
+        )
+        self.client.post(
+            reverse("project-disassociate-team", kwargs={"pk": self.playbook.pk}),
+            {"group": 999999},
+        )
+
+        delete_perm = Permission.objects.get(
+            content_type=ContentType.objects.get_for_model(Project),
+            codename="delete_project",
+        )
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.playbook.pk}),
+            {"group": self.acme.pk, "permissions": [READ, CHANGE, str(delete_perm.pk)]},
+        )
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.playbook.pk}),
+            {"group": self.acme.pk, "permissions": ["not-a-permission"]},
+        )
+        public = Group.objects.get(name=PUBLIC_GROUP_NAME)
+        self.client.post(
+            reverse("project-associate-team", kwargs={"pk": self.notes.pk}),
+            {"group": public.pk},
+        )
+        self.client.post(
+            reverse("project-disassociate-team", kwargs={"pk": self.changelog.pk}),
+            {"group": public.pk},
+        )
+        self.assertTrue(is_public(self.changelog))
+
+        self.assertEqual(
+            handbook_local,
+            set(
+                TrustGroupPermission.objects.filter(
+                    trustgroup__trust=self.handbook.trust, trustgroup__group=self.acme
+                ).values_list("permission_id", flat=True)
+            ),
+        )
+        self.assertEqual(
+            notes_groups_before,
+            set(TrustGroup.objects.filter(trust=self.notes.trust).values_list("group_id", flat=True)),
+        )
+        self.assertEqual(
+            set(
+                TrustGroupPermission.objects.filter(
+                    trustgroup__trust=self.playbook.trust, trustgroup__group=self.acme
+                ).values_list("permission__codename", flat=True)
+            ),
+            {READ, CHANGE},
+        )
+        carol = self._reload(self.users["carol"])
+        self.assertTrue(carol.has_perm("projects.change_project", self.playbook))
+
+    def test_out_of_ceiling_submit_rejected_without_mutation(self):
+        contractors, _ = Group.objects.get_or_create(name="contractors")
+        contractors.permissions.add(project_permission(READ))
+        contractors.user_set.add(self.users["bob"])
+        self.client.force_login(self.users["alice"])
+        self.client.post(
+            reverse("project-associate-team", kwargs={"pk": self.notes.pk}),
+            {"group": contractors.pk},
+        )
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.notes.pk}),
+            {"group": contractors.pk, "permissions": [READ, CHANGE]},
+        )
+        tg = TrustGroup.objects.get(trust=self.notes.trust, group=contractors)
+        self.assertEqual(set(tg.permissions.values_list("codename", flat=True)), set())
+        bob = self._reload(self.users["bob"])
+        self.assertFalse(bob.has_perm("projects.read_project", self.notes))
+        self.assertFalse(bob.has_perm("projects.change_project", self.notes))
+
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.notes.pk}),
+            {"group": contractors.pk, "permissions": [READ]},
+        )
+        bob = self._reload(self.users["bob"])
+        self.assertTrue(bob.has_perm("projects.read_project", self.notes))
+
+        before = set(tg.permissions.values_list("pk", flat=True))
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.notes.pk}),
+            {"group": contractors.pk, "permissions": [READ, CHANGE]},
+        )
+        tg.refresh_from_db()
+        self.assertEqual(before, set(tg.permissions.values_list("pk", flat=True)))
+        bob = self._reload(self.users["bob"])
+        self.assertTrue(bob.has_perm("projects.read_project", self.notes))
+        self.assertFalse(bob.has_perm("projects.change_project", self.notes))
+
+    def test_seeded_public_readers_and_acme_keep_intended_access(self):
+        dave = self.users["dave"]
+        self.assertTrue(dave.has_perm("projects.read_project", self.changelog))
+        self.assertFalse(dave.has_perm("projects.change_project", self.changelog))
+        self.assertTrue(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.changelog.trust,
+                trustgroup__group__name=PUBLIC_GROUP_NAME,
+                permission=project_permission(READ),
+            ).exists()
+        )
+        carol = self.users["carol"]
+        self.assertEqual(
+            list(readable_projects(carol).values_list("title", flat=True)),
+            ["Acme Appendix", "Acme Handbook", "Acme Playbook", "Public Changelog"],
+        )

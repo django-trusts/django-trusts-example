@@ -20,14 +20,127 @@
     <button type="submit">Update visibility</button>
 </form>
 
-<h2>Grant access</h2>
+<h2>Grant trustee access</h2>
 <form method="post" action="{% url 'project-grant' project.pk %}">
     {% csrf_token %}
     {{ grant_form.as_p }}
     <button type="submit">Grant</button>
 </form>
 {% else %}
-<p class="muted">You can read this project but not change it or its grants.</p>
+<p class="muted">You can read this project but not change it, its teams, or its grants.</p>
+{% endif %}
+
+<h2>Teams on this Trust</h2>
+<p class="muted">
+    Local team rights belong to <strong>this project's Trust</strong>
+    (trust {{ project.trust_id }}), not to a single project. They apply to
+    every project that uses it:
+    {% for sibling in trust_projects %}
+        {% if sibling.pk == project.pk %}
+            <strong>{{ sibling.title }}</strong>
+        {% else %}
+            <a href="{{ sibling.get_absolute_url }}">{{ sibling.title }}</a>
+        {% endif %}{% if not forloop.last %}, {% endif %}
+    {% endfor %}.
+    Associating a team does <strong>not</strong> grant access.
+    Effective rights require all three: team membership, this Trust's
+    <strong>local</strong> permissions, and the team's <strong>global ceiling</strong>.
+    A partial setup grants nothing.
+</p>
+<table>
+    <thead>
+        <tr>
+            <th>Team</th>
+            <th>Global ceiling</th>
+            <th>Local rights for this Trust</th>
+            <th>Effective</th>
+            {% if can_change %}<th></th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in teams %}
+        <tr>
+            <td>{{ row.group.name }}</td>
+            <td>
+                {% if row.ceiling_labels %}
+                    {{ row.ceiling_labels|join:", " }}
+                {% else %}
+                    none
+                {% endif %}
+                {% if row.role_names %}
+                    <div class="muted">Roles: {{ row.role_names|join:", " }}</div>
+                {% endif %}
+            </td>
+            <td>
+                {% if row.is_public_readers %}
+                    {% if "read_project" in row.local_codenames %}Read{% else %}none{% endif %}
+                    <div class="muted">Managed by visibility above.</div>
+                {% elif can_change %}
+                    <form method="post" action="{% url 'project-team-permissions' project.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="group" value="{{ row.group.pk }}">
+                        {% for code, label in row.grantable %}
+                        <label>
+                            <input type="checkbox" name="permissions" value="{{ code }}"
+                                   {% if code in row.local_codenames %}checked{% endif %}>
+                            {{ label }}
+                        </label>
+                        {% empty %}
+                        <p class="muted">No project permissions are in this team's ceiling.</p>
+                        {% endfor %}
+                        {% if row.stale_local_labels %}
+                        <p class="muted">
+                            Selected locally but outside the current ceiling
+                            (no effect): {{ row.stale_local_labels|join:", " }}.
+                        </p>
+                        {% endif %}
+                        <button type="submit">Save local rights</button>
+                    </form>
+                {% else %}
+                    {% if row.local_codenames %}
+                        {{ row.local_codenames|join:", " }}
+                    {% else %}
+                        none
+                    {% endif %}
+                {% endif %}
+            </td>
+            <td>
+                {% if row.grants_nothing %}
+                    <span class="badge warn">Associated — grants nothing until local rights are enabled</span>
+                {% else %}
+                    {{ row.effective_labels|join:", " }}
+                {% endif %}
+            </td>
+            {% if can_change %}
+            <td>
+                {% if not row.is_public_readers %}
+                <form class="inline" method="post" action="{% url 'project-disassociate-team' project.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="group" value="{{ row.group.pk }}">
+                    <button type="submit">Remove team from this Trust</button>
+                </form>
+                {% endif %}
+            </td>
+            {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{% if can_change %}5{% else %}4{% endif %}">No teams associated with this trust.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if can_change and associate_form.fields.group.queryset.exists %}
+<h3>Associate a team</h3>
+<p class="muted">
+    This only attaches the team to the Trust. Members still have no access
+    until you enable local rights in the table above. Local rights apply to
+    every project on this Trust.
+</p>
+<form method="post" action="{% url 'project-associate-team' project.pk %}">
+    {% csrf_token %}
+    {{ associate_form.as_p }}
+    <button type="submit">Associate without granting access</button>
+</form>
 {% endif %}
 
 <h2>Trustee grants</h2>
@@ -54,7 +167,7 @@
     </tbody>
 </table>
 <p class="muted">
-    Organization and public read may also come from groups attached to this trust
-    (not listed as trustee rows).
+    Trustee rows are per-user on this Trust. Team access is the local/global
+    intersection above, not listed here.
 </p>
 {% endblock %}

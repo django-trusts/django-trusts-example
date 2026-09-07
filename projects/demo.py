@@ -12,6 +12,7 @@ from .grants import (
     CHANGE,
     PUBLIC_GROUP_NAME,
     READ,
+    grant_local_group_permission,
     grant_user,
     set_public,
     sync_public_readers,
@@ -72,15 +73,17 @@ def seed_demo():
 
     acme_group, _ = Group.objects.get_or_create(name=ACME_GROUP)
     acme_group.user_set.add(carol)
-    Role.objects.get(name="reader").groups.add(acme_group)
+    # Editor role is the global ceiling (read + change). Local TrustGroup
+    # grants choose the subset per Trust.
+    Role.objects.get(name="reader").groups.remove(acme_group)
+    Role.objects.get(name="editor").groups.add(acme_group)
 
     alice_private = ensure_trust(alice, "project:alice-private-notes")
     shared = ensure_trust(alice, "project:shared-roadmap")
     changelog = ensure_trust(alice, "project:public-changelog")
     acme = ensure_trust(alice, "org:acme")
+    playbook = ensure_trust(alice, "project:acme-playbook")
     dave_notes = ensure_trust(dave, "project:dave-notes")
-
-    acme.groups.add(acme_group)
 
     projects = {
         "alice-private-notes": ensure_project(
@@ -99,14 +102,29 @@ def seed_demo():
         "public-changelog": ensure_project(
             changelog,
             "Public Changelog",
-            "Read is granted through the public-readers group on this trust.",
+            "Read is granted through public-readers (associated + local read).",
             alice,
             public=True,
         ),
         "acme-handbook": ensure_project(
             acme,
             "Acme Handbook",
-            "Carol reads via acme-staff + the reader role on the Acme trust.",
+            "Carol reads via acme-staff: editor ceiling, local read only. "
+            "Shares the org:acme Trust with Acme Appendix.",
+            alice,
+        ),
+        "acme-appendix": ensure_project(
+            acme,
+            "Acme Appendix",
+            "Same Trust as Acme Handbook (org:acme). Local team rights and "
+            "visibility are Trust-scoped, so they apply here too.",
+            alice,
+        ),
+        "acme-playbook": ensure_project(
+            playbook,
+            "Acme Playbook",
+            "Carol can change via acme-staff: same ceiling, local read and change "
+            "(separate Trust from Handbook/Appendix).",
             alice,
         ),
         "dave-notes": ensure_project(
@@ -116,6 +134,12 @@ def seed_demo():
             dave,
         ),
     }
+
+    # Same team, different Trusts: Handbook/Appendix share org:acme (local
+    # read). Playbook has its own Trust (local read and change).
+    grant_local_group_permission(projects["acme-handbook"], acme_group, READ)
+    grant_local_group_permission(projects["acme-playbook"], acme_group, READ, CHANGE)
+
     return {
         "users": users,
         "projects": projects,
@@ -128,6 +152,7 @@ def seed_demo():
             "alice_private": alice_private,
             "shared": shared,
             "changelog": changelog,
+            "playbook": playbook,
             "dave_notes": dave_notes,
         },
     }
