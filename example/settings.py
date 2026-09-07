@@ -5,6 +5,14 @@ from pathlib import Path
 
 import dj_database_url
 
+# Django's MySQL backend imports MySQLdb; PyMySQL provides that API.
+# Only needed when DATABASE_URL points at MySQL (dokku-mysql).
+_DATABASE_URL = os.environ.get("DATABASE_URL", "")
+if _DATABASE_URL.startswith(("mysql://", "mysql2://")):
+    import pymysql
+
+    pymysql.install_as_MySQLdb()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get(

@@ -3,6 +3,8 @@
 Django>=6.1,<6.2
 django-trusts @ git+https://github.com/django-trusts/django-trusts.git@5bd2a585d3806571f95bebf89c2852cac3649d25
 gunicorn>=23.0.0
-mysqlclient>=2.2.4
+# Pure-Python driver: mysqlclient has no Linux wheels and needs client headers
+# the stock Herokuish Python buildpack does not provide.
+PyMySQL[rsa]>=1.1.1
 dj-database-url>=2.3.0
 whitenoise>=6.9.0

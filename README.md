@@ -85,7 +85,10 @@ Optional config (demo defaults work without these):
 | `CSRF_TRUSTED_ORIGINS` | `https://trustsexample1.cacheca.com,https://*.cacheca.com` |
 
 `ALLOWED_HOSTS` is `*` for this demo. WhiteNoise serves collected static
-files (admin CSS). Gunicorn binds `example.wsgi` on `$PORT`.
+files (admin CSS). Gunicorn binds `example.wsgi` on `$PORT`. The MySQL
+driver is **PyMySQL** (plus `cryptography` for MySQL 8
+`caching_sha2_password`) so the stock Python buildpack does not need
+`libmysqlclient` headers.
 
 ## Trusts dependency
 
