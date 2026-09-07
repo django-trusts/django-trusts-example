@@ -2,3 +2,11 @@
 # Trusts is not a published PyPI 1.0; pin the identified post-#19 revision.
 Django>=6.1,<6.2
 django-trusts @ git+https://github.com/django-trusts/django-trusts.git@5bd2a585d3806571f95bebf89c2852cac3649d25
+gunicorn>=23.0.0
+# Pure-Python driver: mysqlclient has no Linux wheels and needs client headers
+# the stock Herokuish Python buildpack does not provide.
+# 1.2.0+ reports MySQLdb.version_info >= (2, 2, 1), which Django 6.1 requires.
+# 1.1.1 reports 1.4.6 and raises ImproperlyConfigured at backend import.
+PyMySQL[rsa]>=1.2.0
+dj-database-url>=2.3.0
+whitenoise>=6.9.0

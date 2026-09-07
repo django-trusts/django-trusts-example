@@ -31,3 +31,44 @@ jobs:
         run: |
           python manage.py migrate --noinput
           python manage.py seed_demo
+      - name: Collectstatic and serve admin CSS
+        run: |
+          python manage.py collectstatic --noinput --skip-checks
+          test -f static/admin/css/base.css
+          python scripts/verify_admin_static.py
+
+  mysql-smoke:
+    name: mysql 8 smoke
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        # Django 6.1 requires MySQL 8.4+ (8.0.x raises NotSupportedError).
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: trustsexample1
+          MYSQL_USER: demo
+          MYSQL_PASSWORD: demo
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      DATABASE_URL: mysql://demo:demo@127.0.0.1:3306/trustsexample1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Django 6.1 and Trusts at 5bd2a58
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Migrate, seed, and permission query
+        run: |
+          python manage.py migrate --noinput
+          python manage.py seed_demo
+          python scripts/mysql_smoke.py

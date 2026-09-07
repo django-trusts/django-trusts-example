@@ -55,8 +55,55 @@ default 3). Direct URLs use the same `has_perm` decision as list membership.
 python manage.py test projects
 ```
 
-CI runs that suite on Python 3.12–3.14 with Django 6.1, plus `migrate` and
-`seed_demo`.
+CI runs that suite on Python 3.12–3.14 with Django 6.1 (SQLite), plus
+`migrate` / `seed_demo`, collectstatic + a WhiteNoise fetch of
+`/static/admin/css/base.css`. A separate job runs `migrate`, `seed_demo`,
+and a Trusts list-filter query against **MySQL 8**.
+
+## Dokku
+
+Deploy glue for **trustsexample1.cacheca.com** on Dokku with linked MySQL 8
+(`DATABASE_URL` from dokku-mysql). Django 6.1 requires **MySQL 8.4+**.
+Local `runserver` still uses SQLite when `DATABASE_URL` is unset.
+
+```bash
+git remote add dokku dokku@your-host:trustsexample1
+git push dokku master
+```
+
+The Procfile `release` phase runs `migrate --noinput` only. Dokku does
+**not** persist release-phase filesystem writes into web containers
+([deployment tasks](https://dokku.com/docs/advanced-usage/deployment-tasks/)).
+
+Static files are collected in a step whose output **is** in the web image:
+
+- The Herokuish **Python buildpack** runs `collectstatic --noinput` at
+  compile time when Django is installed. Leave `DISABLE_COLLECTSTATIC`
+  unset.
+- `app.json` `scripts.dokku.predeploy` also runs
+  `collectstatic --noinput --skip-checks` (Dokku commits predeploy
+  changes to the image). `--skip-checks` avoids needing MySQL during
+  that step.
+
+Do **not** put `seed_demo` on every deploy. After the first successful
+release, seed once:
+
+```bash
+dokku run trustsexample1 python manage.py seed_demo
+```
+
+Optional config (demo defaults work without these):
+
+| Var | Default |
+| --- | --- |
+| `SECRET_KEY` | Hard-coded demo key |
+| `CSRF_TRUSTED_ORIGINS` | `https://trustsexample1.cacheca.com,https://*.cacheca.com` |
+
+`ALLOWED_HOSTS` is `*` for this demo. WhiteNoise serves collected static
+files (admin CSS). Gunicorn binds `example.wsgi` on `$PORT`. The MySQL
+driver is **PyMySQL** (plus `cryptography` for MySQL 8
+`caching_sha2_password`) so the stock Python buildpack does not need
+`libmysqlclient` headers.
 
 ## Trusts dependency
 
