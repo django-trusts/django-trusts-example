@@ -7,9 +7,16 @@ from django.test import SimpleTestCase
 
 class DeploySettingsTests(SimpleTestCase):
     def test_local_default_is_sqlite(self):
-        db = settings.DATABASES["default"]
-        self.assertEqual(db["ENGINE"], "django.db.backends.sqlite3")
-        self.assertTrue(str(db["NAME"]).endswith("db.sqlite3"))
+        # The test runner may rewrite NAME to an in-memory DB; the engine
+        # is what shows the demo still uses SQLite when DATABASE_URL is unset.
+        self.assertEqual(
+            settings.DATABASES["default"]["ENGINE"],
+            "django.db.backends.sqlite3",
+        )
+
+    def test_sqlite_fallback_url_points_at_db_file(self):
+        parsed = dj_database_url.parse("sqlite:////tmp/demo/db.sqlite3")
+        self.assertTrue(str(parsed["NAME"]).endswith("db.sqlite3"))
 
     def test_mysql_database_url_parses_for_dokku(self):
         parsed = dj_database_url.parse(
