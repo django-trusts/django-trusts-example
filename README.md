@@ -62,12 +62,12 @@ and a Trusts list-filter query against **MySQL 8**.
 
 ## Dokku
 
-Deploy glue for **trustsexample1.cacheca.com** on Dokku with linked MySQL 8
-(`DATABASE_URL` from dokku-mysql). Django 6.1 requires **MySQL 8.4+**.
-Local `runserver` still uses SQLite when `DATABASE_URL` is unset.
+Deploy glue for Dokku with linked MySQL 8 (`DATABASE_URL` from dokku-mysql).
+Django 6.1 requires **MySQL 8.4+**. Local `runserver` still uses SQLite when
+`DATABASE_URL` is unset.
 
 ```bash
-git remote add dokku dokku@your-host:trustsexample1
+git remote add dokku dokku@your-host:your-app
 git push dokku master
 ```
 
@@ -89,15 +89,25 @@ Do **not** put `seed_demo` on every deploy. After the first successful
 release, seed once:
 
 ```bash
-dokku run trustsexample1 python manage.py seed_demo
+dokku run your-app python manage.py seed_demo
 ```
 
-Optional config (demo defaults work without these):
+Dokku HTTPS login POSTs need `CSRF_TRUSTED_ORIGINS` (Django 4+). Set it to
+your public origin after TLS is enabled:
+
+```bash
+dokku config:set your-app CSRF_TRUSTED_ORIGINS=https://your-app.example.com
+```
+
+Comma-separated extra origins are allowed. Unset, the list is empty (fine
+for local HTTP `runserver`).
+
+Optional config:
 
 | Var | Default |
 | --- | --- |
 | `SECRET_KEY` | Hard-coded demo key |
-| `CSRF_TRUSTED_ORIGINS` | `https://trustsexample1.cacheca.com,https://*.cacheca.com` |
+| `CSRF_TRUSTED_ORIGINS` | empty; set via `dokku config:set` for HTTPS |
 
 `ALLOWED_HOSTS` is `*` for this demo. WhiteNoise serves collected static
 files (admin CSS). Gunicorn binds `example.wsgi` on `$PORT`. The MySQL

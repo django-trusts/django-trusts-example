@@ -45,7 +45,7 @@ jobs:
         # Django 6.1 requires MySQL 8.4+ (8.0.x raises NotSupportedError).
         image: mysql:8.4
         env:
-          MYSQL_DATABASE: trustsexample1
+          MYSQL_DATABASE: example
           MYSQL_USER: demo
           MYSQL_PASSWORD: demo
           MYSQL_ROOT_PASSWORD: root
@@ -57,7 +57,7 @@ jobs:
           --health-timeout=5s
           --health-retries=12
     env:
-      DATABASE_URL: mysql://demo:demo@127.0.0.1:3306/trustsexample1
+      DATABASE_URL: mysql://demo:demo@127.0.0.1:3306/example
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
