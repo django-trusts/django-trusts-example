@@ -4,12 +4,20 @@ Trusts 1.0.0.dev0 has no Content.grant / Content.revoke / QuerySet.permitted
 API. The historical permission-UI branch called those helpers; they lived on
 an unmerged trusts checkout and are not in modernized master. These wrappers
 write TrustUserPermission and Trust.groups rows only.
+
+public-readers is a system-maintained audience: every User row is kept in
+that group so Trusts can grant public read through ordinary group membership.
+Forms and admin must not be able to drop it; see signals and UserAdmin.
 """
+
+import threading
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db.utils import OperationalError, ProgrammingError
+
+_enrolling = threading.local()
 
 from trusts.models import TrustUserPermission
 
@@ -55,11 +63,16 @@ def enroll_in_public_readers(user):
     """Attach one account to public-readers so Trusts group grants apply."""
     if user is None or not getattr(user, "pk", None):
         return
+    if getattr(_enrolling, "busy", False):
+        return
+    _enrolling.busy = True
     try:
         public_readers_group().user_set.add(user)
     except (ProgrammingError, OperationalError, Permission.DoesNotExist, ContentType.DoesNotExist):
         # Migrations / early User inserts before Project permissions exist.
         return
+    finally:
+        _enrolling.busy = False
 
 
 def sync_public_readers():

@@ -1,10 +1,13 @@
 from unittest.mock import patch
 
+from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import QuerySet
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.forms import modelform_factory
+from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from trusts.models import Trust, TrustUserPermission
@@ -183,15 +186,10 @@ class SeededTrustsDemoTests(TestCase):
         self.assertContains(response, "Public Changelog")
         self.assertNotContains(response, "Alice Private Notes")
 
-    def test_sync_enrolls_existing_user_missing_the_group(self):
-        from .grants import sync_public_readers
-
+    def test_removing_public_readers_is_restored_without_seed(self):
         changelog = self.projects["public-changelog"]
         erin = User.objects.create_user("erin-resync", "erin-resync@example.com", "demo")
         erin.groups.remove(*erin.groups.filter(name=PUBLIC_GROUP_NAME))
-        erin = User.objects.get(pk=erin.pk)
-        self.assertFalse(erin.has_perm("projects.read_project", changelog))
-        sync_public_readers()
         erin = User.objects.get(pk=erin.pk)
         self.assertTrue(erin.groups.filter(name=PUBLIC_GROUP_NAME).exists())
         self.assertTrue(erin.has_perm("projects.read_project", changelog))
@@ -349,3 +347,66 @@ class CreateCollisionTests(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "letters or numbers")
         self.assertEqual(Trust.objects.count(), trusts_before)
+
+
+class PublicReadersFormAndAdminTests(TestCase):
+    def setUp(self):
+        seed_demo()
+        self.changelog = Project.objects.get(slug="public-changelog")
+        self.UserForm = modelform_factory(User, fields=("username", "groups"))
+
+    def _assert_public_read(self, user):
+        user = User.objects.get(pk=user.pk)
+        self.assertTrue(user.groups.filter(name=PUBLIC_GROUP_NAME).exists())
+        self.assertTrue(user.has_perm("projects.read_project", self.changelog))
+        self.assertIn(self.changelog.pk, readable_projects(user).values_list("pk", flat=True))
+
+    def test_modelform_create_without_selecting_public_group(self):
+        form = self.UserForm(data={"username": "form-created-user", "groups": []})
+        self.assertTrue(form.is_valid())
+        user = form.save()
+        self._assert_public_read(user)
+
+    def test_modelform_edit_without_selecting_public_group(self):
+        user = User.objects.create_user("form-edited-user", "fe@example.com", "demo")
+        form = self.UserForm(
+            data={"username": user.username, "groups": []},
+            instance=user,
+        )
+        self.assertTrue(form.is_valid())
+        form.save()
+        self._assert_public_read(user)
+
+    def test_useradmin_save_related_create_and_edit(self):
+        from projects.admin import UserAdmin
+
+        factory = RequestFactory()
+        request = factory.post("/admin/auth/user/add/", {})
+        request.user = User.objects.create_superuser("rootadmin", "root@example.com", "demo")
+        admin = UserAdmin(User, AdminSite())
+
+        form = self.UserForm(data={"username": "via-admin", "groups": []})
+        self.assertTrue(form.is_valid())
+        obj = form.save(commit=False)
+        admin.save_model(request, obj, form, change=False)
+        admin.save_related(request, form, [], change=False)
+        self._assert_public_read(User.objects.get(username="via-admin"))
+
+        obj = User.objects.get(username="via-admin")
+        edit = self.UserForm(data={"username": obj.username, "groups": []}, instance=obj)
+        self.assertTrue(edit.is_valid())
+        obj = edit.save(commit=False)
+        admin.save_model(request, obj, edit, change=True)
+        admin.save_related(request, edit, [], change=True)
+        self._assert_public_read(User.objects.get(username="via-admin"))
+
+    def test_groups_set_empty_keeps_public_readers(self):
+        user = User.objects.create_user("cleared-groups", "cg@example.com", "demo")
+        user.groups.set([])
+        self._assert_public_read(user)
+
+    def test_group_admin_cannot_drop_public_readers_member(self):
+        user = User.objects.create_user("group-admin-target", "gat@example.com", "demo")
+        group = Group.objects.get(name=PUBLIC_GROUP_NAME)
+        group.user_set.remove(user)
+        self._assert_public_read(user)

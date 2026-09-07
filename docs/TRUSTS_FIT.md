@@ -4,8 +4,9 @@ This note is the issue #16 record of what Trusts does on its own and what
 the example still has to do. It is not a claim that the declarative
 authorization thesis is complete.
 
-**No django-trusts API or method change was required for this example.**
-There is no companion core PR and no `migrates.md` update.
+**The django-trusts library API is unchanged.** Example behavior changes
+(list helper, create, public-readers enrollment) are recorded in
+[migrates.md](../migrates.md). There is no companion core PR.
 
 Inspected before this rewrite:
 
@@ -32,8 +33,10 @@ does not pretend they exist.
   `reader` role materialized by `update_roles_permissions` (role path).
 - Public read as the `public-readers` group attached to that project's trust
   (group-permission path). Same tables `has_perm` reads. Existing accounts
-  are synced into the group at seed; new accounts are enrolled by a
-  `post_save` signal. That is still a group row, not a Python allow-list.
+  are synced into the group at seed; create/edit forms and admin keep every
+  user in that group (`post_save` + `m2m_changed` + `UserAdmin.save_related`).
+  That is still a group row, not a Python allow-list. `public-readers` is a
+  system-maintained audience for every signed-in account.
 - View guards via `trusts.decorators.permission_required` and `K()`.
 - Cross-organization isolation: Dave's notes are on Dave's trust; Alice's
   grants do not leak.
@@ -50,8 +53,9 @@ does not pretend they exist.
   core API.
 - **Create flow.** Allocate a unique slug, then create trust + project +
   owner grants in one transaction. Trusts does not auto-grant the settlor.
-- **Public-readers enrollment.** Application signal / seed sync writes the
-  group membership Trusts already evaluates. Not a per-request predicate.
+- **Public-readers enrollment.** Application signals, admin `save_related`,
+  and seed sync write the group membership Trusts already evaluates. Not a
+  per-request predicate. See [migrates.md](../migrates.md).
 - **UI and seed.** Forms, templates, `seed_demo`, demo passwords.
 
 ## Model limitations (not papered over)

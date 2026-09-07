@@ -71,4 +71,5 @@ The default branch was a starter only. The historical
 collaborator idea. The app was rewritten for Django 6.1 and the modern
 Trusts API. See [docs/TRUSTS_FIT.md](docs/TRUSTS_FIT.md).
 
-**No django-trusts API or method change** was made for this example.
+**The django-trusts library API is unchanged.** Example behavior changes
+are recorded in [migrates.md](migrates.md).
