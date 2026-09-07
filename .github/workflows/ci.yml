@@ -42,7 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:8.0
+        # Django 6.1 requires MySQL 8.4+ (8.0.x raises NotSupportedError).
+        image: mysql:8.4
         env:
           MYSQL_DATABASE: trustsexample1
           MYSQL_USER: demo

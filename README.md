@@ -63,8 +63,8 @@ and a Trusts list-filter query against **MySQL 8**.
 ## Dokku
 
 Deploy glue for **trustsexample1.cacheca.com** on Dokku with linked MySQL 8
-(`DATABASE_URL` from dokku-mysql). Local `runserver` still uses SQLite when
-`DATABASE_URL` is unset.
+(`DATABASE_URL` from dokku-mysql). Django 6.1 requires **MySQL 8.4+**.
+Local `runserver` still uses SQLite when `DATABASE_URL` is unset.
 
 ```bash
 git remote add dokku dokku@your-host:trustsexample1
