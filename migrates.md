@@ -75,27 +75,26 @@ Migration-bot checklist:
 
 | | |
 | --- | --- |
-| Previous | `example/settings.py` defaulted `CSRF_TRUSTED_ORIGINS` to `https://trustsexample1.cacheca.com,https://*.cacheca.com` when the env var was unset. HTTPS login and other unsafe POSTs on that host worked without operator config. |
-| New | Parse `CSRF_TRUSTED_ORIGINS` from the environment when set; otherwise `[]`. The hostname is not a source default. |
+| Previous | `example/settings.py` defaulted `CSRF_TRUSTED_ORIGINS` to a private Dokku hostname when the env var was unset. HTTPS login and other unsafe POSTs on that host worked without operator config. |
+| New | Parse `CSRF_TRUSTED_ORIGINS` from the environment when set; otherwise `[]`. Private hostnames are not a source default. |
 | Replacement | Set the env var on each HTTPS deploy (`dokku config:set your-app CSRF_TRUSTED_ORIGINS=https://your-app.example.com`). Local HTTP `runserver` needs no origin list. |
 | Affected | `example/settings.py`; Dokku/HTTPS deploys; Django login and other unsafe-method POSTs. |
 | Authorization | Unchanged. Trusts `has_perm` / backends are not involved. This is CSRF origin checking only. |
 
-The live demo must have `CSRF_TRUSTED_ORIGINS=https://trustsexample1.cacheca.com` configured **before** its next deployment of this revision. Do **not** restore that hostname as a source default.
+Existing HTTPS deployments that relied on the old default must set `CSRF_TRUSTED_ORIGINS` to their public origin **before** deploying this revision. Do **not** put private hostnames in source defaults.
 
 Migration-bot checklist:
 
 - [ ] Confirm `example/settings.py` has no hard-coded CSRF hostname default.
-- [ ] Set and verify `CSRF_TRUSTED_ORIGINS` on the target HTTPS app (`dokku config:show` / equivalent) **before** deploying this revision.
-- [ ] Live demo: `CSRF_TRUSTED_ORIGINS=https://trustsexample1.cacheca.com` must be set before the next deploy.
+- [ ] Set and verify `CSRF_TRUSTED_ORIGINS` via `dokku config` (or equivalent) **before** deploying this revision.
 - [ ] After deploy, confirm an HTTPS login POST succeeds.
-- [ ] Do not put the private hostname back into source defaults.
+- [ ] Do not put private hostnames in source defaults.
 
 ## Migration-bot summary
 
 - [ ] Keep `AUTHENTICATION_BACKENDS` as `trusts.backends.TrustModelBackend`.
 - [ ] Apply the four example checklists above.
-- [ ] Set and verify `CSRF_TRUSTED_ORIGINS` before deploying this revision (live demo: `https://trustsexample1.cacheca.com`); then confirm an HTTPS login POST succeeds.
+- [ ] Set and verify `CSRF_TRUSTED_ORIGINS` via `dokku config` (or equivalent) before deploying this revision; then confirm an HTTPS login POST succeeds. Do not put private hostnames in source defaults.
 - [ ] `python manage.py test projects`
 - [ ] `python manage.py migrate --noinput && python manage.py seed_demo`
 - [ ] Do not edit django-trusts `migrates.md` for these example-only changes.
