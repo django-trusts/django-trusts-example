@@ -58,6 +58,35 @@ python manage.py test projects
 CI runs that suite on Python 3.12–3.14 with Django 6.1, plus `migrate` and
 `seed_demo`.
 
+## Dokku
+
+Deploy glue for **trustsexample1.cacheca.com** on Dokku with linked MySQL 8
+(`DATABASE_URL` from dokku-mysql). Local `runserver` still uses SQLite when
+`DATABASE_URL` is unset.
+
+```bash
+git remote add dokku dokku@your-host:trustsexample1
+git push dokku master
+```
+
+The Procfile `release` phase runs `migrate --noinput` and `collectstatic`.
+Do **not** put `seed_demo` on every deploy. After the first successful
+release, seed once:
+
+```bash
+dokku run trustsexample1 python manage.py seed_demo
+```
+
+Optional config (demo defaults work without these):
+
+| Var | Default |
+| --- | --- |
+| `SECRET_KEY` | Hard-coded demo key |
+| `CSRF_TRUSTED_ORIGINS` | `https://trustsexample1.cacheca.com,https://*.cacheca.com` |
+
+`ALLOWED_HOSTS` is `*` for this demo. WhiteNoise serves collected static
+files (admin CSS). Gunicorn binds `example.wsgi` on `$PORT`.
+
 ## Trusts dependency
 
 `requirements.txt` / `pyproject.toml` install Trusts from the git SHA above,

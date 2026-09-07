@@ -1,12 +1,31 @@
 """Demo settings for the django-trusts example. Not for production."""
 
+import os
 from pathlib import Path
+
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-trusts-example-demo-not-for-production"
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "django-trusts-example-demo-not-for-production",
+)
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
+
+# Dokku/nginx terminates TLS and forwards the original scheme.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# HTTPS login POST needs this (Django 4+). Comma-separated override via env.
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CSRF_TRUSTED_ORIGINS",
+        "https://trustsexample1.cacheca.com,https://*.cacheca.com",
+    ).split(",")
+    if origin.strip()
+]
 
 # Match Trusts: keep AutoField so example models do not switch to BigAutoField.
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
@@ -28,6 +47,7 @@ AUTHENTICATION_BACKENDS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -56,11 +76,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "example.wsgi.application"
 
+# DATABASE_URL (dokku-mysql) when set; otherwise local SQLite.
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+    )
 }
 
 LANGUAGE_CODE = "en-us"
