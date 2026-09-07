@@ -55,8 +55,10 @@ default 3). Direct URLs use the same `has_perm` decision as list membership.
 python manage.py test projects
 ```
 
-CI runs that suite on Python 3.12–3.14 with Django 6.1, plus `migrate` and
-`seed_demo`.
+CI runs that suite on Python 3.12–3.14 with Django 6.1 (SQLite), plus
+`migrate` / `seed_demo`, collectstatic + a WhiteNoise fetch of
+`/static/admin/css/base.css`. A separate job runs `migrate`, `seed_demo`,
+and a Trusts list-filter query against **MySQL 8**.
 
 ## Dokku
 
@@ -69,7 +71,20 @@ git remote add dokku dokku@your-host:trustsexample1
 git push dokku master
 ```
 
-The Procfile `release` phase runs `migrate --noinput` and `collectstatic`.
+The Procfile `release` phase runs `migrate --noinput` only. Dokku does
+**not** persist release-phase filesystem writes into web containers
+([deployment tasks](https://dokku.com/docs/advanced-usage/deployment-tasks/)).
+
+Static files are collected in a step whose output **is** in the web image:
+
+- The Herokuish **Python buildpack** runs `collectstatic --noinput` at
+  compile time when Django is installed. Leave `DISABLE_COLLECTSTATIC`
+  unset.
+- `app.json` `scripts.dokku.predeploy` also runs
+  `collectstatic --noinput --skip-checks` (Dokku commits predeploy
+  changes to the image). `--skip-checks` avoids needing MySQL during
+  that step.
+
 Do **not** put `seed_demo` on every deploy. After the first successful
 release, seed once:
 

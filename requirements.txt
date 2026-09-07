@@ -5,6 +5,8 @@ django-trusts @ git+https://github.com/django-trusts/django-trusts.git@5bd2a585d
 gunicorn>=23.0.0
 # Pure-Python driver: mysqlclient has no Linux wheels and needs client headers
 # the stock Herokuish Python buildpack does not provide.
-PyMySQL[rsa]>=1.1.1
+# 1.2.0+ reports MySQLdb.version_info >= (2, 2, 1), which Django 6.1 requires.
+# 1.1.1 reports 1.4.6 and raises ImproperlyConfigured at backend import.
+PyMySQL[rsa]>=1.2.0
 dj-database-url>=2.3.0
 whitenoise>=6.9.0
