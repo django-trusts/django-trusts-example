@@ -14,7 +14,16 @@ from django.urls import reverse
 from trusts.models import Role, Trust, TrustGroup, TrustGroupPermission, TrustUserPermission
 
 from .demo import seed_demo
-from .grants import CHANGE, PUBLIC_GROUP_NAME, READ, grant_user, is_public, project_permission, set_public
+from .grants import (
+    CHANGE,
+    PUBLIC_GROUP_NAME,
+    READ,
+    grant_user,
+    is_public,
+    project_permission,
+    public_readers_group,
+    set_public,
+)
 from .models import Project
 from .query import editable_projects, readable_projects
 
@@ -32,15 +41,21 @@ class SeededTrustsDemoTests(TestCase):
 
     def test_seeded_users_groups_and_owned_objects(self):
         self.assertEqual(set(self.users), {"alice", "bob", "carol", "dave"})
-        self.assertGreaterEqual(Project.objects.count(), 6)
+        self.assertGreaterEqual(Project.objects.count(), 7)
         self.assertTrue(Trust.objects.filter(title="org:acme").exists())
         self.assertTrue(Trust.objects.filter(title="project:acme-playbook").exists())
         self.assertTrue(self.users["carol"].groups.filter(name="acme-staff").exists())
+        handbook = self.projects["acme-handbook"]
+        appendix = self.projects["acme-appendix"]
+        self.assertEqual(handbook.trust_id, appendix.trust_id)
+        self.assertEqual(handbook.trust.title, "org:acme")
+        self.assertNotEqual(self.projects["acme-playbook"].trust_id, handbook.trust_id)
 
     def test_seeded_readable_titles(self):
         self.assertEqual(
             self._titles(self.users["alice"]),
             [
+                "Acme Appendix",
                 "Acme Handbook",
                 "Acme Playbook",
                 "Alice Private Notes",
@@ -54,7 +69,7 @@ class SeededTrustsDemoTests(TestCase):
         )
         self.assertEqual(
             self._titles(self.users["carol"]),
-            ["Acme Handbook", "Acme Playbook", "Public Changelog"],
+            ["Acme Appendix", "Acme Handbook", "Acme Playbook", "Public Changelog"],
         )
         self.assertEqual(
             self._titles(self.users["dave"]),
@@ -86,6 +101,7 @@ class SeededTrustsDemoTests(TestCase):
         self.assertContains(response, "Public Changelog")
         self.assertNotContains(response, "Alice Private Notes")
         self.assertNotContains(response, "Acme Handbook")
+        self.assertNotContains(response, "Acme Appendix")
         self.assertNotContains(response, "Acme Playbook")
         self.assertNotContains(response, "Shared Roadmap")
 
@@ -428,12 +444,53 @@ class TrustGroupProjectSettingsTests(TestCase):
         self.acme = Group.objects.get(name="acme-staff")
         self.handbook = self.projects["acme-handbook"]
         self.playbook = self.projects["acme-playbook"]
+        self.appendix = self.projects["acme-appendix"]
         self.notes = self.projects["alice-private-notes"]
         self.shared = self.projects["shared-roadmap"]
         self.changelog = self.projects["public-changelog"]
 
     def _reload(self, user):
         return User.objects.get(pk=user.pk)
+
+    def test_association_only_public_readers_is_not_public(self):
+        dave = self.users["dave"]
+        group = public_readers_group()
+        self.notes.trust.groups.add(group)
+        self.assertTrue(
+            TrustGroup.objects.filter(trust=self.notes.trust, group=group).exists()
+        )
+        self.assertFalse(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.notes.trust, trustgroup__group=group
+            ).exists()
+        )
+        self.assertFalse(is_public(self.notes))
+        dave = self._reload(dave)
+        self.assertFalse(dave.has_perm("projects.read_project", self.notes))
+        self.assertNotIn(self.notes.pk, readable_projects(dave).values_list("pk", flat=True))
+
+        self.client.force_login(self.users["alice"])
+        response = self.client.get(self.notes.get_absolute_url())
+        self.assertContains(response, '<span class="badge">private</span>', html=True)
+        self.assertNotContains(response, '<span class="badge">public</span>', html=True)
+        self.assertContains(response, "Associated — grants nothing until local rights are enabled")
+        self.assertNotContains(response, 'id="id_is_public" checked')
+        self.assertFalse(response.context["is_public"])
+        self.assertFalse(response.context["visibility_form"].initial["is_public"])
+
+        public = public_readers_group()
+        self.assertTrue(is_public(self.changelog))
+        public.permissions.remove(project_permission(READ))
+        self.assertTrue(
+            TrustGroupPermission.objects.filter(
+                trustgroup__trust=self.changelog.trust,
+                trustgroup__group=public,
+                permission=project_permission(READ),
+            ).exists()
+        )
+        self.assertFalse(is_public(self.changelog))
+        dave = self._reload(dave)
+        self.assertFalse(dave.has_perm("projects.read_project", self.changelog))
 
     def test_same_team_change_on_a_read_on_b(self):
         carol = self.users["carol"]
@@ -443,12 +500,17 @@ class TrustGroupProjectSettingsTests(TestCase):
         self.assertTrue(carol.has_perm("projects.change_project", self.playbook))
         self.assertIn(self.playbook.pk, editable_projects(carol).values_list("pk", flat=True))
         self.assertNotIn(self.handbook.pk, editable_projects(carol).values_list("pk", flat=True))
+        self.assertEqual(self.appendix.trust_id, self.handbook.trust_id)
+        self.assertNotEqual(self.playbook.trust_id, self.handbook.trust_id)
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+        self.assertFalse(carol.has_perm("projects.change_project", self.appendix))
 
     def test_detail_distinguishes_association_local_and_ceiling(self):
         self.client.force_login(self.users["alice"])
         handbook = self.client.get(self.handbook.get_absolute_url())
         self.assertContains(handbook, "Global ceiling")
-        self.assertContains(handbook, "Local rights for this project")
+        self.assertContains(handbook, "Local rights for this Trust")
+        self.assertContains(handbook, "Acme Appendix")
         self.assertContains(handbook, "acme-staff")
         self.assertContains(handbook, "editor")
         self.assertContains(handbook, "does <strong>not</strong> grant access")
@@ -458,7 +520,7 @@ class TrustGroupProjectSettingsTests(TestCase):
 
         notes = self.client.get(self.notes.get_absolute_url())
         self.assertContains(notes, "Associate without granting access")
-        self.assertContains(notes, "This only attaches the team")
+        self.assertContains(notes, "This only attaches the team to the Trust")
 
     def test_newly_associated_team_grants_nothing_until_local_rights(self):
         carol = self.users["carol"]
@@ -510,13 +572,17 @@ class TrustGroupProjectSettingsTests(TestCase):
         self.assertFalse(carol.has_perm("projects.change_project", self.playbook))
         self.assertTrue(carol.has_perm("projects.read_project", self.handbook))
         self.assertFalse(carol.has_perm("projects.change_project", self.handbook))
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+        self.assertFalse(carol.has_perm("projects.change_project", self.appendix))
         self.assertNotIn(self.playbook.pk, editable_projects(carol).values_list("pk", flat=True))
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+        self.assertFalse(carol.has_perm("projects.change_project", self.appendix))
 
         self.client.force_login(self.users["alice"])
         detail = self.client.get(self.playbook.get_absolute_url())
         self.assertContains(detail, "outside the current ceiling")
 
-    def test_removing_local_permission_affects_only_that_project(self):
+    def test_removing_local_permission_does_not_affect_another_trust(self):
         self.client.force_login(self.users["alice"])
         self.client.post(
             reverse("project-team-permissions", kwargs={"pk": self.playbook.pk}),
@@ -537,6 +603,48 @@ class TrustGroupProjectSettingsTests(TestCase):
                 permission=project_permission(READ),
             ).exists()
         )
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+
+    def test_shared_trust_local_rights_apply_to_all_projects_on_the_trust(self):
+        self.assertEqual(self.appendix.trust_id, self.handbook.trust_id)
+        carol = self.users["carol"]
+        dave = self.users["dave"]
+        self.client.force_login(self.users["alice"])
+        handbook_page = self.client.get(self.handbook.get_absolute_url())
+        self.assertContains(handbook_page, "this project's Trust")
+        self.assertContains(handbook_page, "Remove team from this Trust")
+        self.assertContains(handbook_page, "Acme Appendix")
+
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.handbook.pk}),
+            {"group": self.acme.pk},
+        )
+        carol = self._reload(carol)
+        self.assertFalse(carol.has_perm("projects.read_project", self.handbook))
+        self.assertFalse(carol.has_perm("projects.read_project", self.appendix))
+        self.assertTrue(carol.has_perm("projects.read_project", self.playbook))
+        self.assertTrue(
+            TrustGroup.objects.filter(trust=self.handbook.trust, group=self.acme).exists()
+        )
+
+        self.client.post(
+            reverse("project-team-permissions", kwargs={"pk": self.appendix.pk}),
+            {"group": self.acme.pk, "permissions": [READ]},
+        )
+        carol = self._reload(carol)
+        self.assertTrue(carol.has_perm("projects.read_project", self.handbook))
+        self.assertTrue(carol.has_perm("projects.read_project", self.appendix))
+
+        self.client.post(
+            reverse("project-visibility", kwargs={"pk": self.handbook.pk}),
+            {"is_public": "on"},
+        )
+        self.assertTrue(is_public(self.handbook))
+        self.assertTrue(is_public(self.appendix))
+        dave = self._reload(dave)
+        self.assertTrue(dave.has_perm("projects.read_project", self.handbook))
+        self.assertTrue(dave.has_perm("projects.read_project", self.appendix))
+        self.assertFalse(dave.has_perm("projects.read_project", self.playbook))
 
     def test_unauthorized_and_readonly_cannot_change_teams(self):
         self.client.force_login(self.users["bob"])
@@ -727,5 +835,5 @@ class TrustGroupProjectSettingsTests(TestCase):
         carol = self.users["carol"]
         self.assertEqual(
             list(readable_projects(carol).values_list("title", flat=True)),
-            ["Acme Handbook", "Acme Playbook", "Public Changelog"],
+            ["Acme Appendix", "Acme Handbook", "Acme Playbook", "Public Changelog"],
         )

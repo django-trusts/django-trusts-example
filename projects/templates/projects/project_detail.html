@@ -30,10 +30,20 @@
 <p class="muted">You can read this project but not change it, its teams, or its grants.</p>
 {% endif %}
 
-<h2>Teams on this project</h2>
+<h2>Teams on this Trust</h2>
 <p class="muted">
-    Associating a team with this project's trust does <strong>not</strong> grant access.
-    Effective rights require all three: team membership, this trust's
+    Local team rights belong to <strong>this project's Trust</strong>
+    (trust {{ project.trust_id }}), not to a single project. They apply to
+    every project that uses it:
+    {% for sibling in trust_projects %}
+        {% if sibling.pk == project.pk %}
+            <strong>{{ sibling.title }}</strong>
+        {% else %}
+            <a href="{{ sibling.get_absolute_url }}">{{ sibling.title }}</a>
+        {% endif %}{% if not forloop.last %}, {% endif %}
+    {% endfor %}.
+    Associating a team does <strong>not</strong> grant access.
+    Effective rights require all three: team membership, this Trust's
     <strong>local</strong> permissions, and the team's <strong>global ceiling</strong>.
     A partial setup grants nothing.
 </p>
@@ -42,7 +52,7 @@
         <tr>
             <th>Team</th>
             <th>Global ceiling</th>
-            <th>Local rights for this project</th>
+            <th>Local rights for this Trust</th>
             <th>Effective</th>
             {% if can_change %}<th></th>{% endif %}
         </tr>
@@ -107,7 +117,7 @@
                 <form class="inline" method="post" action="{% url 'project-disassociate-team' project.pk %}">
                     {% csrf_token %}
                     <input type="hidden" name="group" value="{{ row.group.pk }}">
-                    <button type="submit">Remove team from this project</button>
+                    <button type="submit">Remove team from this Trust</button>
                 </form>
                 {% endif %}
             </td>
@@ -122,8 +132,9 @@
 {% if can_change and associate_form.fields.group.queryset.exists %}
 <h3>Associate a team</h3>
 <p class="muted">
-    This only attaches the team. Members still have no project access until you
-    enable local rights in the table above.
+    This only attaches the team to the Trust. Members still have no access
+    until you enable local rights in the table above. Local rights apply to
+    every project on this Trust.
 </p>
 <form method="post" action="{% url 'project-associate-team' project.pk %}">
     {% csrf_token %}
@@ -156,7 +167,7 @@
     </tbody>
 </table>
 <p class="muted">
-    Trustee rows are per-user. Team access is the local/global intersection above,
-    not listed here.
+    Trustee rows are per-user on this Trust. Team access is the local/global
+    intersection above, not listed here.
 </p>
 {% endblock %}

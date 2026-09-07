@@ -74,8 +74,9 @@ the TrustGroup intersection from #23.
   TrustGroup local rights. This demo gives most projects their own trust so
   visibility and collaborator lists stay per-object. The Acme Handbook
   shares the Acme trust with any future Acme content — that is the intended
-  organization pattern and also the limitation. Acme Playbook has its own
-  trust so the same team can have different local rights.
+  organization pattern and also the limitation. **Acme Appendix** is seeded on
+  that same Trust so the UI can show Trust-scoped local rights. Acme Playbook
+  has its own Trust so the same team can have different local rights.
 - Django `User.has_perm` short-circuits for `is_superuser`. Superusers are
   not a Trusts proof. Seed users are ordinary users. The list helper does
   **not** special-case superusers; a superuser may see a narrower list than

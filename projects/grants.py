@@ -18,7 +18,12 @@ from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db.utils import OperationalError, ProgrammingError
 
-from trusts.models import TrustGroup, TrustUserPermission, get_group_global_ceiling
+from trusts.models import (
+    TrustGroup,
+    TrustUserPermission,
+    get_group_global_ceiling,
+    permission_in_global_ceiling,
+)
 
 from .models import Project
 
@@ -95,7 +100,25 @@ def sync_public_readers():
 
 
 def is_public(project):
-    return project.trust.groups.filter(name=PUBLIC_GROUP_NAME).exists()
+    """True when public-readers has *effective* read on this project's Trust.
+
+    Association alone is not public. The same intersection ``has_perm`` uses
+    must hold: TrustGroup row, local ``read_project``, and that permission
+    inside the group's global ceiling.
+    """
+    read = project_permission(READ)
+    tg = (
+        TrustGroup.objects.filter(
+            trust=project.trust,
+            group__name=PUBLIC_GROUP_NAME,
+            permissions=read,
+        )
+        .select_related("group")
+        .first()
+    )
+    if tg is None:
+        return False
+    return permission_in_global_ceiling(tg.group, read)
 
 
 def set_public(project, make_public):

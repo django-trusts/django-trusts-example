@@ -33,8 +33,9 @@ class VisibilityForm(forms.Form):
         required=False,
         label="Public (any signed-in user can read)",
         help_text=(
-            "Associates the public-readers group with this project's trust "
-            "and enables local read. Association alone does not grant access."
+            "Associates the public-readers group with this project's Trust "
+            "and enables local read for every project on that Trust. "
+            "Association alone does not grant access."
         ),
     )
 
@@ -49,8 +50,9 @@ class AssociateTeamForm(forms.Form):
         queryset=Group.objects.none(),
         label="Team",
         help_text=(
-            "Attaches the team to this project's trust. This does not grant "
-            "access. Enable local rights after associating."
+            "Attaches the team to this project's Trust. This does not grant "
+            "access. Enable local rights after associating. Those rights apply "
+            "to every project that uses the Trust."
         ),
         empty_label="Select a team to associate",
     )

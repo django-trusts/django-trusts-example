@@ -27,35 +27,40 @@ Open http://127.0.0.1:8000/ and log in. Every seeded password is `demo`.
 
 | User | What the seed is for |
 | --- | --- |
-| `alice` | Owner of private notes, a shared roadmap, a public changelog, the Acme handbook, and the Acme playbook |
+| `alice` | Owner of private notes, a shared roadmap, a public changelog, the Acme handbook and appendix (one Trust), and the Acme playbook |
 | `bob` | Trustee with **read** on Shared Roadmap |
-| `carol` | `acme-staff` member; **read** on Acme Handbook and **change** on Acme Playbook (same team, different local rights) |
+| `carol` | `acme-staff` member; **read** on Acme Handbook and Acme Appendix (shared `org:acme` Trust) and **change** on Acme Playbook (separate Trust) |
 | `dave` | Outsider plus his own notes; reads Alice's work only when it is public |
 
 `acme-staff` has the **editor** role as its global ceiling (read + change).
-Local TrustGroup grants choose the subset per project. Associating the team
-without local rights grants nothing.
+Local TrustGroup grants choose the subset **per Trust**. Associating the team
+without local rights grants nothing. Handbook and Appendix share `org:acme`,
+so a local change there applies to both. Playbook has its own Trust so the
+same team can have different local rights.
 
 ## Demo workflows
 
 1. **Create an object** — as alice (or bob), *New project*. The creator gets
    read and change trustee rows on a new trust.
 2. **Change visibility** — on a project you can change, toggle public. Public
-   associates `public-readers` and enables **local read**. Association alone
-   does not grant access. Every signed-in account is enrolled in that group
-   (seeded users and accounts created later). Log in as dave — or create
-   another user — to see the list change.
+   associates `public-readers` and enables **local read** on that Trust
+   (every project on the Trust). Association alone does not grant access;
+   the page only shows **public** when that intersection is effective.
+   Every signed-in account is enrolled in that group (seeded users and
+   accounts created later). Log in as dave — or create another user — to
+   see the list change.
 3. **Grant / revoke trustees** — grant bob or dave read (or read+change), then revoke.
 4. **Teams** — on a project you can change, associate `acme-staff` without
    granting access (the row shows “grants nothing”). Enable local **Read**
    and/or **Change** only if those codes are in the team's global ceiling.
-   Saving a permission outside the ceiling is rejected and does not mutate.
-   Log in as carol to confirm Handbook vs Playbook.
+   Those rights apply to **every project on this Trust**. Saving a
+   permission outside the ceiling is rejected and does not mutate.
+   Log in as carol: Handbook and Appendix share read; Playbook has change.
 5. **Another user's view** — log out and in as bob, carol, or dave. The home
    list is already filtered.
 6. **Unauthorized edits** — as bob, open Alice Private Notes (403) or edit
    Shared Roadmap (403: bob has read only). As carol, edit Acme Handbook
-   (403: local read only) but edit Acme Playbook (allowed).
+   or Acme Appendix (403: local read only) but edit Acme Playbook (allowed).
 
 List pages paginate *after* the Trusts SQL filter (`PROJECT_PAGE_SIZE`,
 default 3) from `Project.objects.permitted`. Direct URLs use the same

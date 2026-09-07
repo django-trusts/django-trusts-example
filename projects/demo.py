@@ -74,7 +74,7 @@ def seed_demo():
     acme_group, _ = Group.objects.get_or_create(name=ACME_GROUP)
     acme_group.user_set.add(carol)
     # Editor role is the global ceiling (read + change). Local TrustGroup
-    # grants choose the subset per project.
+    # grants choose the subset per Trust.
     Role.objects.get(name="reader").groups.remove(acme_group)
     Role.objects.get(name="editor").groups.add(acme_group)
 
@@ -109,13 +109,22 @@ def seed_demo():
         "acme-handbook": ensure_project(
             acme,
             "Acme Handbook",
-            "Carol reads via acme-staff: editor ceiling, local read only.",
+            "Carol reads via acme-staff: editor ceiling, local read only. "
+            "Shares the org:acme Trust with Acme Appendix.",
+            alice,
+        ),
+        "acme-appendix": ensure_project(
+            acme,
+            "Acme Appendix",
+            "Same Trust as Acme Handbook (org:acme). Local team rights and "
+            "visibility are Trust-scoped, so they apply here too.",
             alice,
         ),
         "acme-playbook": ensure_project(
             playbook,
             "Acme Playbook",
-            "Carol can change via acme-staff: same ceiling, local read and change.",
+            "Carol can change via acme-staff: same ceiling, local read and change "
+            "(separate Trust from Handbook/Appendix).",
             alice,
         ),
         "dave-notes": ensure_project(
@@ -126,7 +135,8 @@ def seed_demo():
         ),
     }
 
-    # Same team, different local rights. Association is created by the grant.
+    # Same team, different Trusts: Handbook/Appendix share org:acme (local
+    # read). Playbook has its own Trust (local read and change).
     grant_local_group_permission(projects["acme-handbook"], acme_group, READ)
     grant_local_group_permission(projects["acme-playbook"], acme_group, READ, CHANGE)
 

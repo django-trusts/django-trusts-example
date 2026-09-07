@@ -29,6 +29,7 @@ alice_titles = list(readable_projects(alice).values_list("title", flat=True))
 bob_titles = list(readable_projects(bob).values_list("title", flat=True))
 
 expected_alice = [
+    "Acme Appendix",
     "Acme Handbook",
     "Acme Playbook",
     "Alice Private Notes",

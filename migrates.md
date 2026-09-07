@@ -148,24 +148,25 @@ Migration-bot checklist:
 | --- | --- |
 | Previous | `set_public` called `trust.groups.add(public-readers)`. With implicit group grants that was enough. |
 | New | `trust.grant_group_permission(public-readers, read_project)` (associates + local read). Detach still `groups.remove`. `Group.permissions` on public-readers remains the global ceiling (`read_project` only). |
-| Replacement | Same `set_public` / visibility form. Help text states association alone does not grant access. |
+| Replacement | Same `set_public` / visibility form. Help text states association alone does not grant access. `is_public()` is the effective intersection (association + local read + ceiling), not association-only. |
 | Affected | Public Changelog seed, visibility POST, users created after seed. |
-| Authorization | A public-readers association with an empty local set grants nothing. Seed and the visibility form always write the local read tuple when making public. |
+| Authorization | A public-readers association with an empty local set grants nothing **and** `is_public()` is false (the page shows private, not public + “grants nothing”). Seed and the visibility form always write the local read tuple when making public. |
 
 Migration-bot checklist:
 
 - [ ] After migrate, confirm public projects have a `TrustGroupPermission` for `read_project`.
 - [ ] Do not treat `trust.groups.add(public-readers)` as a grant.
+- [ ] Do not treat association-only as `is_public()` / a public badge.
 
 ### 7. Project settings distinguish association, local rights, and ceiling
 
 | | |
 | --- | --- |
 | Previous | No team UI. Organization access was `Trust.groups.add(acme-staff)` plus the `reader` role (implicit grant). |
-| New | Settings show (1) associated teams, (2) local TrustGroup checkboxes limited to this project's grantable permissions **inside the group's global ceiling**, (3) the ceiling (and contributing roles) as read-only. Associate POSTs `associate_group_with_trust` with no permissions. Local POSTs `set_trust_group_permissions`. Unknown / cross-project IDs and permissions outside the ceiling raise `AuthorizationDenied` and **do not mutate**. Public-readers stays on the visibility form. |
+| New | Settings show (1) associated teams, (2) local TrustGroup checkboxes limited to grantable permissions **inside the group's global ceiling**, (3) the ceiling (and contributing roles) as read-only. Copy states that local rights belong to **this project's Trust** and apply to every project on it. Associate POSTs `associate_group_with_trust` with no permissions. Local POSTs `set_trust_group_permissions`. Unknown / cross-project IDs and permissions outside the ceiling raise `AuthorizationDenied` and **do not mutate**. Public-readers stays on the visibility form. |
 | Replacement | New routes: `project-associate-team`, `project-disassociate-team`, `project-team-permissions`. |
 | Affected | Project detail template; change-gated POSTs. Read-only users see the table and get 403 on mutate URLs. |
-| Authorization | Partial setup (associated, no local rights) displays “grants nothing” and `has_perm` is false. Removing a ceiling permission revokes it on every associated project even if it remains selected locally. Removing a local permission affects only that project. |
+| Authorization | Partial setup (associated, no local rights) displays “grants nothing” and `has_perm` is false. Removing a ceiling permission revokes it on every Trust that still has a local tuple, even if it remains selected locally. Removing a local permission affects that **Trust** (every project using it), not other Trusts. |
 
 Migration-bot checklist:
 
@@ -179,15 +180,15 @@ Migration-bot checklist:
 | | |
 | --- | --- |
 | Previous | `acme-staff` + `reader` role on `org:acme`. Carol read Acme Handbook implicitly. Four Alice-owned demo projects. |
-| New | `acme-staff` uses the **editor** role as the global ceiling (read + change). Acme Handbook gets local **read** only. New **Acme Playbook** (own trust) gets local **read and change**. `seed_demo` writes those `TrustGroupPermission` rows; it does not run `grandfather_trust_group_permissions`. |
+| New | `acme-staff` uses the **editor** role as the global ceiling (read + change). Acme Handbook and **Acme Appendix** share `org:acme` with local **read** only (Trust-scoped). New **Acme Playbook** (own Trust) gets local **read and change**. `seed_demo` writes those `TrustGroupPermission` rows; it does not run `grandfather_trust_group_permissions`. |
 | Replacement | Same command: `python manage.py seed_demo`. Idempotent. |
-| Affected | Carol's list (Handbook + Playbook + public Changelog). Alice's list includes Playbook. README demo table. |
-| Authorization | Existing seeded users keep their intended access after the pin bump **because seed writes local tuples**. A migrate without re-seed would leave public-readers / acme-staff associated and grant nothing. |
+| Affected | Carol's list (Appendix + Handbook + Playbook + public Changelog). Alice's list includes Appendix and Playbook. README demo table. |
+| Authorization | Existing seeded users keep their intended access after the pin bump **because seed writes local tuples**. A migrate without re-seed would leave public-readers / acme-staff associated and grant nothing. Local rights on `org:acme` apply to Handbook and Appendix together. |
 
 Migration-bot checklist:
 
 - [ ] `migrate` then `seed_demo` (not grandfather) for this demo.
-- [ ] Confirm carol: `change` on Playbook, `read` only on Handbook.
+- [ ] Confirm carol: `change` on Playbook, `read` only on Handbook **and** Appendix (shared Trust).
 - [ ] Confirm dave still reads Public Changelog and not private notes.
 
 ## Deployment / migration checklist (example)

@@ -82,6 +82,7 @@ def _detail_context(request, project, can_change):
         "is_public": is_public(project),
         "trustees": trustee_rows(project),
         "teams": team_setting_rows(project),
+        "trust_projects": Project.objects.filter(trust=project.trust).order_by("title", "pk"),
         "grant_form": GrantForm() if can_change else None,
         "visibility_form": VisibilityForm(initial={"is_public": is_public(project)})
         if can_change
@@ -184,7 +185,7 @@ def project_associate_team(request, pk):
         return redirect(project)
     messages.success(
         request,
-        f"Associated {group.name} with this project. No access granted until local rights are enabled.",
+        f"Associated {group.name} with this Trust. No access granted until local rights are enabled.",
     )
     return redirect(project)
 
@@ -207,7 +208,7 @@ def project_disassociate_team(request, pk):
     except AuthorizationDenied:
         messages.error(request, "Could not remove team. No changes were saved.")
         return redirect(project)
-    messages.success(request, f"Removed {group.name} from this project.")
+    messages.success(request, f"Removed {group.name} from this Trust.")
     return redirect(project)
 
 
@@ -242,7 +243,10 @@ def project_team_permissions(request, pk):
             "global ceiling are rejected. No changes were saved.",
         )
         return redirect(project)
-    messages.success(request, "Updated local team rights for this project.")
+    messages.success(
+        request,
+        "Updated local team rights for this Trust. They apply to every project using it.",
+    )
     return redirect(project)
 
 
