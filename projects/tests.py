@@ -4,14 +4,17 @@ from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.conf import settings
+from django.core import checks as django_checks
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import QuerySet
 from django.forms import modelform_factory
-from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
-from trusts.models import Role, Trust, TrustGroup, TrustGroupPermission, TrustUserPermission
+from trusts.conditions import Expr
+from trusts.models import Content, Role, Trust, TrustGroup, TrustGroupPermission, TrustUserPermission
 
 from .demo import seed_demo
 from .grants import (
@@ -287,15 +290,14 @@ class PaginationAndQueryTests(TestCase):
         self.assertNotContains(response, "Pad B")
 
     def test_public_visibility_uses_group_grant_not_a_condition_code(self):
-        from trusts.models import Content
-
         changelog = Project.objects.get(slug="public-changelog")
         self.assertTrue(is_public(changelog))
         dave = User.objects.get(username="dave")
         self.assertTrue(dave.has_perm("projects.read_project", changelog))
-        # :own is a Python predicate on Trust. Project does not register one;
+        # :own is a V1 Expr on Trust. Project does not register one;
         # public read is a group row, not a condition code.
         self.assertIsNone(Content.get_permission_condition_func(Project, "own"))
+        self.assertIsNone(Content.get_permission_condition_record(Project, "own"))
         self.assertFalse(dave.has_perm("projects.change_project", changelog))
 
 
@@ -837,3 +839,31 @@ class TrustGroupProjectSettingsTests(TestCase):
             list(readable_projects(carol).values_list("title", flat=True)),
             ["Acme Appendix", "Acme Handbook", "Acme Playbook", "Public Changelog"],
         )
+
+
+class TrustsPinExprAndCheckTests(SimpleTestCase):
+    """Pinned Trusts master: Expr :own, no callable leftover, check is clean."""
+
+    def test_legacy_callback_escape_hatch_is_unset(self):
+        self.assertFalse(
+            getattr(settings, "TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS", False)
+        )
+
+    def test_trust_own_is_queryable_expr_not_a_callable(self):
+        record = Content.get_permission_condition_record(Trust, "own")
+        self.assertIsNotNone(record)
+        self.assertIsInstance(record.expr, Expr)
+        self.assertIsNone(record.func)
+        self.assertIsNone(Content.get_permission_condition_record(Project, "own"))
+        self.assertIsNone(Content.get_permission_condition_func(Project, "own"))
+
+    def test_system_checks_have_no_trusts_condition_errors(self):
+        messages = django_checks.run_checks()
+        condition_ids = {m.id for m in messages} & {
+            "trusts.E001",
+            "trusts.E002",
+            "trusts.W001",
+        }
+        self.assertEqual(condition_ids, set())
+        errors = [m for m in messages if m.level >= django_checks.ERROR]
+        self.assertEqual(errors, [])

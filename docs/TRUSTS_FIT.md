@@ -5,9 +5,12 @@ the example still has to do. It is not a claim that the declarative
 authorization thesis is complete.
 
 Example behavior changes are recorded in [migrates.md](../migrates.md).
-django-trusts **#23 / PR #24** is the companion core change (TrustGroup
-local/global intersection). This example pins that merge and exposes it in
-project settings.
+django-trusts **#23 / PR #24** is the TrustGroup local/global
+intersection. **#28** registers queryable V1 `Expr` conditions via
+`condition_refs()`. **#29 / PR #30** validates those registrations
+with Django system checks (`trusts.E001` / `trusts.E002`). This
+example pins that master tip and exposes TrustGroup in project
+settings. It does not register a Project permission condition.
 
 Inspected for this revision:
 
@@ -15,7 +18,7 @@ Inspected for this revision:
 | --- | --- | --- |
 | `django-trusts-example` default `master` | pre-#5 | Demo against Trusts post-#19; group attach implied access. |
 | Historical `DJANGO-TRUSTS-8-Edit-Perm-Pages` / PR #1 | `54e83b76fee2e6e950cec94366adec038ebc1260` | Incomplete Project / collaborator UI on Django 1.8 / Python 2. |
-| `django-trusts` master (PR #24 merge) | `b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20` | Installable 1.0.0.dev0 used here. |
+| `django-trusts` master (PR #30 merge) | `8916a760fbe849170e88e3969723b317d0360cd1` | Installable 1.0.0.dev0 used here (Expr + system checks). |
 
 The historical branch is the useful ancestor for *domain shape* (a `Project`
 `Content` subclass, settlor trusts, collaborators, groups). Core now ships
@@ -82,10 +85,14 @@ the TrustGroup intersection from #23.
   **not** special-case superusers; a superuser may see a narrower list than
   `has_perm` would allow. That mismatch is documented, not treated as
   Trusts validation.
-- `:own` on `Trust` is a registered **Python predicate**
-  (`lambda u, p, o: u == o.settlor`). This example does not use `:own` for
-  list membership or as evidence that permission declarations evaluate in a
-  single query. Public / private is a group grant, not a condition code.
+- `:own` on `Trust` is a registered **V1 `Expr`** (`u == o.settlor` from
+  `condition_refs()`), queryable on `Trust.objects.permitted`. This
+  example does not register a Project condition and does not use `:own`
+  for project list membership. Public / private is a group grant, not a
+  condition code. Callable conditions stay off (`TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`
+  is unset; default False). `manage.py check` must stay clean of
+  `trusts.E001` / `trusts.E002`.
 
-Windows ACL work stays on django-trusts#17. Parent Trust inheritance,
-explicit deny, and SQL condition compilation stay out of scope.
+Windows ACL work stays on django-trusts#17. Parent Trust inheritance
+and explicit deny stay out of scope. Core V1 `Expr` SQL compilation is
+available; this demo does not register a Project condition.

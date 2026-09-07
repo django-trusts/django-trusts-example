@@ -205,3 +205,62 @@ Do **not** Dokku-deploy this revision until the example PR is reviewed.
 - [ ] Set `CSRF_TRUSTED_ORIGINS` on HTTPS deploys (unchanged; still no private hostname defaults).
 - [ ] When an operator later deploys: migrate, seed once if the database is new; on an already-seeded Dokku app, re-run `seed_demo` so local TrustGroup rows exist (the command is idempotent). Do not put `seed_demo` on every release.
 
+# Pin django-trusts through #28 Expr + #29 system checks
+
+This record covers the example app after django-trusts **#28 / PR #28**
+(queryable V1 `Expr` conditions) and **#29 / PR #30** (Django system
+checks). The pin is master HEAD
+`8916a760fbe849170e88e3969723b317d0360cd1`. Core `migrates.md` on that
+revision is the library contract. This file records **example** old/new
+behavior only.
+
+Authorization still goes through `TrustModelBackend` / Trusts tables.
+Group access remains the fail-closed TrustGroup intersection from #23.
+No new Trusts schema migration is required beyond `trusts.0002_trustgroup`
+(already applied on the previous pin).
+
+## Pin
+
+| | |
+| --- | --- |
+| Previous | `django-trusts` at `b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20` (PR #24 merge; TrustGroup only). |
+| New | `django-trusts` at `8916a760fbe849170e88e3969723b317d0360cd1` (PR #30 merge on master: #29 system checks, includes #28 `Expr` registration). |
+| Replacement | Same git URL, new SHA in `requirements.txt` / `pyproject.toml`. |
+| Affected | `manage.py check` now reports `trusts.E001` (invalid `Expr`) and `trusts.E002` (callable conditions unless the legacy flag is on). Trust `:own` is an `Expr` (`u == o.settlor`), not a lambda. |
+| Authorization | Unchanged for this demo. Project list / visibility / teams stay trustee and TrustGroup rows. The example does not register a Project condition and does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`. |
+
+## Changes (example)
+
+### 9. No Project condition registration; do not enable the callable escape hatch
+
+| | |
+| --- | --- |
+| Previous | Trust `:own` was documented as a Python lambda. The example never registered a Project condition. Public read was (and is) a group grant. |
+| New | Trust `:own` is a queryable `Expr` in core. Project still has no `permission_conditions`. Settings do **not** set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS` (default False). CI runs `python manage.py check` and fails on `trusts.E001` / `trusts.E002`. |
+| Replacement | If a future Project condition is V1-shaped, register `u, p, o = condition_refs()` plus an `Expr` via `Meta.permission_conditions` or `Content.register_permission_condition`. Do not keep a lambda and flip the escape hatch. |
+| Affected | Docs, CI `check` step, pin comments. Seed, TrustGroup UI, and list SQL are unchanged. |
+| Authorization | Same grants as the TrustGroup pin. Callable leftover registrations would fail closed (`trusts.E002`) rather than run. |
+
+Migration-bot checklist:
+
+- [ ] Confirm `requirements.txt` / `pyproject.toml` pin the SHA, not `master`.
+- [ ] Confirm `example/settings.py` does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
+- [ ] Confirm `Project` has no callable `permission_conditions`.
+- [ ] `python manage.py check` with no `SILENCED_SYSTEM_CHECKS` for `trusts.E001` / `trusts.E002`.
+- [ ] `python manage.py test projects`
+- [ ] Re-run `seed_demo` only if the database is new or TrustGroup local rows are missing.
+
+## Deployment / migration checklist (example)
+
+Do **not** Dokku-deploy this revision until the example PR is reviewed.
+After merge, a redeploy can follow (no new Trusts schema).
+
+- [ ] Install Trusts at `8916a760fbe849170e88e3969723b317d0360cd1`.
+- [ ] `python manage.py check` (must be clean of `trusts.E001` / `trusts.E002`).
+- [ ] `python manage.py migrate --noinput` (no new Trusts migration expected).
+- [ ] `python manage.py seed_demo` only if the database is new or local TrustGroup rows are missing.
+- [ ] `python manage.py test projects`
+- [ ] Keep `AUTHENTICATION_BACKENDS` as `trusts.backends.TrustModelBackend`.
+- [ ] Do not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS` for this demo.
+- [ ] Set `CSRF_TRUSTED_ORIGINS` on HTTPS deploys (unchanged; still no private hostname defaults).
+

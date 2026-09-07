@@ -3,9 +3,11 @@
 Runnable Django 6.1 application that exercises
 [django-trusts](https://github.com/django-trusts/django-trusts) **1.0.0.dev0**
 at revision
-[`b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20`](https://github.com/django-trusts/django-trusts/commit/b5d5ae18e1fbe4901d0350a82a2aab1dcac92a20)
-(PR [#24](https://github.com/django-trusts/django-trusts/pull/24) merge:
-fail-closed per-Trust group permission intersection).
+[`8916a760fbe849170e88e3969723b317d0360cd1`](https://github.com/django-trusts/django-trusts/commit/8916a760fbe849170e88e3969723b317d0360cd1)
+(latest `master`: PR [#30](https://github.com/django-trusts/django-trusts/pull/30)
+/ [#29](https://github.com/django-trusts/django-trusts/issues/29) system checks,
+including PR [#28](https://github.com/django-trusts/django-trusts/pull/28) V1
+queryable `Expr` conditions and the earlier TrustGroup intersection).
 
 This is the implementation repository for [django-trusts#16](https://github.com/django-trusts/django-trusts/issues/16).
 It does not close the parent [django-trusts#11](https://github.com/django-trusts/django-trusts/issues/11) tracker.
@@ -69,13 +71,18 @@ default 3) from `Project.objects.permitted`. Direct URLs use the same
 ## Checks
 
 ```bash
+python manage.py check
 python manage.py test projects
 ```
 
+`manage.py check` must stay clean of `trusts.E001` / `trusts.E002`
+(invalid `Expr` registrations or leftover callable conditions). This
+example does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
+
 CI runs that suite on Python 3.12–3.14 with Django 6.1 (SQLite), plus
-`migrate` / `seed_demo`, collectstatic + a WhiteNoise fetch of
-`/static/admin/css/base.css`. A separate job runs `migrate`, `seed_demo`,
-and a Trusts list-filter query against **MySQL 8**.
+`check`, `migrate` / `seed_demo`, collectstatic + a WhiteNoise fetch of
+`/static/admin/css/base.css`. A separate job runs `check`, `migrate`,
+`seed_demo`, and a Trusts list-filter query against **MySQL 8**.
 
 ## Dokku
 
@@ -83,10 +90,12 @@ Deploy glue for Dokku with linked MySQL 8 (`DATABASE_URL` from dokku-mysql).
 Django 6.1 requires **MySQL 8.4+**. Local `runserver` still uses SQLite when
 `DATABASE_URL` is unset.
 
-**Do not push this TrustGroup revision to Dokku until the example PR is
-reviewed.** After review, migrate then re-run `seed_demo` once so local
-TrustGroup rows exist (`seed_demo` is idempotent). Do not run
-`grandfather_trust_group_permissions` for this demo.
+**Do not push this Trusts pin bump to Dokku until the example PR is
+reviewed.** After merge, redeploy, migrate (no new Trusts schema beyond
+the already-applied TrustGroup migration), then re-run `seed_demo` only
+if the database is new or local TrustGroup rows are missing (`seed_demo`
+is idempotent). Do not run `grandfather_trust_group_permissions` for
+this demo.
 
 ```bash
 git remote add dokku dokku@your-host:your-app
@@ -150,6 +159,6 @@ The default branch was a starter only. The historical
 collaborator idea. The app was rewritten for Django 6.1 and the modern
 Trusts API. See [docs/TRUSTS_FIT.md](docs/TRUSTS_FIT.md).
 
-Example behavior changes (including the TrustGroup pin bump) are recorded
-in [migrates.md](migrates.md). Core library behavior for #23 is in
-django-trusts `migrates.md` on the pinned revision.
+Example behavior changes (including the Trusts pin bump through #28+#30)
+are recorded in [migrates.md](migrates.md). Core library behavior for
+#23 / #28 / #29 is in django-trusts `migrates.md` on the pinned revision.
