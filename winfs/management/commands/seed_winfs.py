@@ -14,6 +14,7 @@ class Command(BaseCommand):
             self.stdout.write("winfs volume 'vol' already exists.")
             return
         data = standard_tree()
+        allow(data["vol"], data["eng"], R, ci=True)
         allow(data["proj"], data["eng"], R, oi=True, ci=True)
         self.stdout.write(
             "Seeded volume vol/ with alice, bob, carol, admin, and eng "

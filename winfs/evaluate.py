@@ -114,7 +114,7 @@ candidates AS (
   SELECT n.id, n.parent_id, n.kind, n.name, n.volume_id,
          n.security_descriptor_id
   FROM win_node n
-  WHERE %(use_ids)s = 0 OR n.id = ANY(%(candidate_ids)s)
+  WHERE (%(use_ids)s = 0 OR n.id = ANY(%(candidate_ids)s))
     AND (%(parent_id)s IS NULL OR n.parent_id = %(parent_id)s)
 ),
 anc AS (

@@ -1,0 +1,211 @@
+Limit  (cost=120.32..120.33 rows=1 width=60) (actual time=0.296..0.303 rows=1 loops=1)
+  Buffers: shared hit=46
+  CTE requester
+    ->  Seq Scan on win_principal p  (cost=0.00..1.00 rows=1 width=4) (actual time=0.002..0.002 rows=1 loops=1)
+          Filter: (user_id = 222)
+          Rows Removed by Filter: 3
+          Buffers: shared hit=1
+  CTE token
+    ->  Unique  (cost=3.89..3.90 rows=2 width=4) (actual time=0.025..0.027 rows=2 loops=1)
+          Buffers: shared hit=1
+          ->  Sort  (cost=3.89..3.89 rows=2 width=4) (actual time=0.025..0.026 rows=2 loops=1)
+                Sort Key: requester.sid_id
+                Sort Method: quicksort  Memory: 25kB
+                Buffers: shared hit=1
+                ->  Append  (cost=0.00..3.88 rows=2 width=4) (actual time=0.000..0.020 rows=2 loops=1)
+                      Buffers: shared hit=1
+                      ->  CTE Scan on requester  (cost=0.00..0.02 rows=1 width=4) (actual time=0.000..0.001 rows=1 loops=1)
+                      ->  Hash Join  (cost=0.03..3.85 rows=1 width=4) (actual time=0.017..0.018 rows=1 loops=1)
+                            Hash Cond: (m.member_sid_id = r.sid_id)
+                            Buffers: shared hit=1
+                            ->  Seq Scan on win_sid_member m  (cost=0.00..3.04 rows=204 width=8) (actual time=0.001..0.001 rows=2 loops=1)
+                                  Buffers: shared hit=1
+                            ->  Hash  (cost=0.02..0.02 rows=1 width=4) (actual time=0.002..0.002 rows=1 loops=1)
+                                  Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                  ->  CTE Scan on requester r  (cost=0.00..0.02 rows=1 width=4) (actual time=0.000..0.000 rows=1 loops=1)
+  CTE candidates
+    ->  Seq Scan on win_node n  (cost=0.00..1.83 rows=1 width=82) (actual time=0.005..0.005 rows=1 loops=1)
+          Filter: (id = ANY ('{485}'::smallint[]))
+          Rows Removed by Filter: 13
+          Buffers: shared hit=1
+  CTE anc
+    ->  Recursive Union  (cost=0.00..63.88 rows=11 width=87) (actual time=0.002..0.098 rows=10 loops=1)
+          Buffers: shared hit=18
+          ->  CTE Scan on candidates c_1  (cost=0.00..0.02 rows=1 width=87) (actual time=0.001..0.002 rows=1 loops=1)
+          ->  Hash Right Join  (cost=2.31..6.38 rows=1 width=87) (actual time=0.007..0.009 rows=1 loops=10)
+                Hash Cond: (cur.id = a.sd_id)
+                Filter: (NOT COALESCE(cur.se_dacl_protected, false))
+                Buffers: shared hit=18
+                ->  Seq Scan on win_security_descriptor cur  (cost=0.00..3.20 rows=220 width=5) (actual time=0.000..0.001 rows=14 loops=9)
+                      Buffers: shared hit=9
+                ->  Hash  (cost=2.29..2.29 rows=2 width=91) (actual time=0.005..0.005 rows=1 loops=10)
+                      Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                      Buffers: shared hit=9
+                      ->  Hash Join  (cost=0.25..2.29 rows=2 width=91) (actual time=0.003..0.004 rows=1 loops=10)
+                            Hash Cond: (p_1.id = a.parent_id)
+                            Buffers: shared hit=9
+                            ->  Seq Scan on win_node p_1  (cost=0.00..1.74 rows=74 width=46) (actual time=0.000..0.001 rows=14 loops=9)
+                                  Buffers: shared hit=9
+                            ->  Hash  (cost=0.22..0.22 rows=2 width=49) (actual time=0.001..0.001 rows=1 loops=10)
+                                  Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                  ->  WorkTable Scan on anc a  (cost=0.00..0.22 rows=2 width=49) (actual time=0.000..0.000 rows=1 loops=10)
+                                        Filter: ((NOT saw_cycle) AND (dist < 64))
+  CTE incoming
+    ->  Nested Loop  (cost=2.56..5.36 rows=1 width=102) (actual time=0.034..0.035 rows=1 loops=1)
+          Buffers: shared hit=4
+          ->  Hash Join  (cost=2.43..4.75 rows=1 width=70) (actual time=0.029..0.029 rows=1 loops=1)
+                Hash Cond: (ace.descriptor_id = a_1.sd_id)
+                Join Filter: ((a_1.dist = 0) OR ((a_1.dist >= 1) AND ((NOT ace.flag_np) OR (a_1.dist = 1)) AND ((((t.kind)::text = 'file'::text) AND ace.flag_oi) OR (((t.kind)::text = 'folder'::text) AND (ace.flag_oi OR ace.flag_ci)))))
+                Buffers: shared hit=2
+                ->  Seq Scan on win_ace ace  (cost=0.00..1.89 rows=89 width=62) (actual time=0.001..0.001 rows=1 loops=1)
+                      Buffers: shared hit=1
+                ->  Hash  (cost=2.38..2.38 rows=4 width=46) (actual time=0.018..0.018 rows=10 loops=1)
+                      Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                      Buffers: shared hit=1
+                      ->  Hash Join  (cost=0.33..2.38 rows=4 width=46) (actual time=0.014..0.015 rows=10 loops=1)
+                            Hash Cond: (t.id = a_1.target_id)
+                            Buffers: shared hit=1
+                            ->  Seq Scan on win_node t  (cost=0.00..1.74 rows=74 width=38) (actual time=0.001..0.001 rows=14 loops=1)
+                                  Buffers: shared hit=1
+                            ->  Hash  (cost=0.28..0.28 rows=4 width=12) (actual time=0.004..0.004 rows=10 loops=1)
+                                  Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                  ->  CTE Scan on anc a_1  (cost=0.00..0.28 rows=4 width=12) (actual time=0.001..0.002 rows=10 loops=1)
+                                        Filter: ((dist = 0) OR (dist >= 1))
+          ->  Index Scan using win_sid_pkey on win_sid s_1  (cost=0.12..0.37 rows=1 width=36) (actual time=0.004..0.004 rows=1 loops=1)
+                Index Cond: (id = ace.trustee_sid_id)
+                Buffers: shared hit=2
+  CTE gates
+    ->  CTE Scan on candidates c_2  (cost=0.00..6.55 rows=1 width=16) (actual time=0.166..0.167 rows=1 loops=1)
+          Buffers: shared hit=32
+          SubPlan 6
+            ->  Aggregate  (cost=0.25..0.26 rows=1 width=1) (actual time=0.106..0.107 rows=1 loops=1)
+                  Buffers: shared hit=18
+                  ->  CTE Scan on anc a_2  (cost=0.00..0.25 rows=1 width=1) (actual time=0.004..0.103 rows=10 loops=1)
+                        Filter: (target_id = c_2.id)
+                        Buffers: shared hit=18
+          SubPlan 7
+            ->  Aggregate  (cost=0.25..0.26 rows=1 width=1) (actual time=0.003..0.003 rows=1 loops=1)
+                  ->  CTE Scan on anc a_3  (cost=0.00..0.25 rows=1 width=8) (actual time=0.000..0.001 rows=10 loops=1)
+                        Filter: (target_id = c_2.id)
+          SubPlan 12
+            ->  Aggregate  (cost=5.93..5.94 rows=1 width=1) (actual time=0.015..0.015 rows=1 loops=1)
+                  Buffers: shared hit=10
+                  ->  CTE Scan on anc a_4  (cost=0.00..0.25 rows=1 width=13) (actual time=0.000..0.001 rows=10 loops=1)
+                        Filter: (target_id = c_2.id)
+                  SubPlan 9
+                    ->  Seq Scan on win_security_descriptor sd  (cost=0.00..3.20 rows=110 width=4) (actual time=0.001..0.001 rows=0 loops=1)
+                          Filter: se_dacl_protected
+                          Rows Removed by Filter: 14
+                          Buffers: shared hit=1
+                  SubPlan 10
+                    ->  Seq Scan on win_node p_2  (cost=0.00..1.93 rows=1 width=0) (actual time=0.001..0.001 rows=1 loops=9)
+                          Filter: (id = a_4.parent_id)
+                          Rows Removed by Filter: 8
+                          Buffers: shared hit=9
+          SubPlan 13
+            ->  Aggregate  (cost=0.03..0.04 rows=1 width=1) (actual time=0.037..0.037 rows=1 loops=1)
+                  Buffers: shared hit=4
+                  ->  CTE Scan on incoming i  (cost=0.00..0.02 rows=1 width=32) (actual time=0.035..0.035 rows=1 loops=1)
+                        Filter: (target_id = c_2.id)
+                        Buffers: shared hit=4
+          SubPlan 14
+            ->  Aggregate  (cost=0.02..0.03 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
+                  ->  CTE Scan on incoming i_1  (cost=0.00..0.02 rows=1 width=0) (actual time=0.000..0.000 rows=1 loops=1)
+                        Filter: (target_id = c_2.id)
+  CTE seed
+    ->  Nested Loop  (cost=0.04..7.66 rows=1 width=14) (actual time=0.201..0.202 rows=1 loops=1)
+          Join Filter: (c_3.id = g_1.target_id)
+          Buffers: shared hit=36
+          InitPlan 16 (returns $17)
+            ->  CTE Scan on requester requester_1  (cost=0.00..0.02 rows=1 width=0) (actual time=0.004..0.004 rows=1 loops=1)
+                  Buffers: shared hit=1
+          InitPlan 19 (returns $20)
+            ->  CTE Scan on requester requester_2  (cost=0.00..0.02 rows=1 width=0) (actual time=0.000..0.000 rows=1 loops=1)
+          ->  CTE Scan on candidates c_3  (cost=0.00..0.02 rows=1 width=8) (actual time=0.000..0.000 rows=1 loops=1)
+          ->  CTE Scan on gates g_1  (cost=0.00..0.02 rows=1 width=5) (actual time=0.167..0.167 rows=1 loops=1)
+                Buffers: shared hit=32
+          SubPlan 17
+            ->  Seq Scan on win_security_descriptor sd_1  (cost=0.00..3.75 rows=1 width=0) (actual time=0.001..0.001 rows=1 loops=1)
+                  Filter: (id = c_3.security_descriptor_id)
+                  Rows Removed by Filter: 13
+                  Buffers: shared hit=1
+          SubPlan 20
+            ->  Nested Loop Semi Join  (cost=0.00..3.81 rows=1 width=0) (actual time=0.027..0.027 rows=1 loops=1)
+                  Join Filter: (sd_2.owner_sid_id = token.sid_id)
+                  Buffers: shared hit=2
+                  ->  Seq Scan on win_security_descriptor sd_2  (cost=0.00..3.75 rows=1 width=4) (actual time=0.001..0.001 rows=1 loops=1)
+                        Filter: (id = c_3.security_descriptor_id)
+                        Rows Removed by Filter: 13
+                        Buffers: shared hit=1
+                  ->  CTE Scan on token  (cost=0.00..0.04 rows=2 width=4) (actual time=0.026..0.026 rows=1 loops=1)
+                        Buffers: shared hit=1
+  CTE scan
+    ->  Recursive Union  (cost=0.00..29.76 rows=11 width=21) (actual time=0.001..0.058 rows=2 loops=1)
+          Buffers: shared hit=6
+          ->  CTE Scan on seed s_2  (cost=0.00..0.02 rows=1 width=21) (actual time=0.000..0.001 rows=1 loops=1)
+          ->  Nested Loop  (cost=2.61..2.96 rows=1 width=21) (actual time=0.026..0.027 rows=0 loops=2)
+                Join Filter: ((sc_1.target_id = i_2.target_id) AND ((sc_1.seq + 1) = (row_number() OVER (?))))
+                Buffers: shared hit=6
+                ->  WindowAgg  (cost=2.52..2.55 rows=1 width=66) (actual time=0.019..0.019 rows=1 loops=2)
+                      Buffers: shared hit=6
+                      ->  Sort  (cost=2.52..2.53 rows=1 width=94) (actual time=0.016..0.016 rows=1 loops=2)
+                            Sort Key: i_2.target_id, i_2.dist, i_2.ace_order
+                            Sort Method: quicksort  Memory: 25kB
+                            Buffers: shared hit=6
+                            ->  Nested Loop Left Join  (cost=0.18..2.51 rows=1 width=94) (actual time=0.011..0.012 rows=1 loops=2)
+                                  Buffers: shared hit=6
+                                  ->  Hash Join  (cost=0.04..2.08 rows=1 width=94) (actual time=0.008..0.009 rows=1 loops=2)
+                                        Hash Cond: (t_1.id = i_2.target_id)
+                                        Join Filter: (((i_2.dist = 0) AND (NOT i_2.flag_io)) OR ((i_2.dist >= 1) AND (((t_1.kind)::text <> 'folder'::text) OR (NOT i_2.flag_oi) OR i_2.flag_ci OR (i_2.flag_np AND (i_2.dist = 1)))))
+                                        Buffers: shared hit=2
+                                        ->  Seq Scan on win_node t_1  (cost=0.00..1.74 rows=74 width=42) (actual time=0.000..0.001 rows=14 loops=2)
+                                              Buffers: shared hit=2
+                                        ->  Hash  (cost=0.03..0.03 rows=1 width=94) (actual time=0.003..0.003 rows=1 loops=1)
+                                              Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                              ->  CTE Scan on incoming i_2  (cost=0.00..0.03 rows=1 width=94) (actual time=0.001..0.001 rows=1 loops=1)
+                                                    Filter: (((dist = 0) AND (NOT flag_io)) OR (dist >= 1))
+                                  ->  Index Scan using win_security_descriptor_pkey on win_security_descriptor tsd  (cost=0.14..0.43 rows=1 width=8) (actual time=0.002..0.002 rows=1 loops=2)
+                                        Index Cond: (id = t_1.security_descriptor_id)
+                                        Buffers: shared hit=4
+                ->  WorkTable Scan on scan sc_1  (cost=0.00..0.22 rows=4 width=21) (actual time=0.000..0.000 rows=0 loops=2)
+                      Filter: ((NOT denied) AND (remaining <> 0))
+                      Rows Removed by Filter: 0
+                SubPlan 23
+                  ->  CTE Scan on token token_1  (cost=0.00..0.04 rows=2 width=4) (actual time=0.000..0.001 rows=2 loops=1)
+                SubPlan 24
+                  ->  CTE Scan on token token_2  (cost=0.00..0.04 rows=2 width=4) (actual time=0.000..0.000 rows=2 loops=1)
+  ->  Sort  (cost=0.39..0.39 rows=1 width=60) (actual time=0.295..0.296 rows=1 loops=1)
+        Sort Key: c.name, c.id
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=46
+        ->  Nested Loop  (cost=0.26..0.38 rows=1 width=60) (actual time=0.277..0.279 rows=1 loops=1)
+              Buffers: shared hit=43
+              ->  Nested Loop  (cost=0.00..0.09 rows=1 width=50) (actual time=0.211..0.212 rows=1 loops=1)
+                    Join Filter: (s.target_id = g.target_id)
+                    Buffers: shared hit=37
+                    ->  Nested Loop  (cost=0.00..0.05 rows=1 width=42) (actual time=0.209..0.209 rows=1 loops=1)
+                          Join Filter: (c.id = s.target_id)
+                          Buffers: shared hit=37
+                          ->  CTE Scan on candidates c  (cost=0.00..0.02 rows=1 width=36) (actual time=0.006..0.007 rows=1 loops=1)
+                                Buffers: shared hit=1
+                          ->  CTE Scan on seed s  (cost=0.00..0.02 rows=1 width=6) (actual time=0.201..0.202 rows=1 loops=1)
+                                Filter: (has_requester AND sd_present)
+                                Buffers: shared hit=36
+                    ->  CTE Scan on gates g  (cost=0.00..0.02 rows=1 width=16) (actual time=0.002..0.002 rows=1 loops=1)
+                          Filter: ((NOT saw_cycle) AND (NOT overflow) AND (NOT dangling) AND (NOT owner_rights) AND (incoming_ace_count <= 4096))
+              ->  Subquery Scan on last  (cost=0.26..0.28 rows=1 width=9) (actual time=0.065..0.066 rows=1 loops=1)
+                    Filter: ((NOT last.denied) AND (last.remaining = 0))
+                    Buffers: shared hit=6
+                    ->  Limit  (cost=0.26..0.26 rows=1 width=17) (actual time=0.064..0.065 rows=1 loops=1)
+                          Buffers: shared hit=6
+                          ->  Sort  (cost=0.26..0.26 rows=1 width=17) (actual time=0.064..0.064 rows=1 loops=1)
+                                Sort Key: sc.seq DESC
+                                Sort Method: quicksort  Memory: 25kB
+                                Buffers: shared hit=6
+                                ->  CTE Scan on scan sc  (cost=0.00..0.25 rows=1 width=17) (actual time=0.002..0.058 rows=2 loops=1)
+                                      Filter: (target_id = c.id)
+                                      Buffers: shared hit=6
+Planning:
+  Buffers: shared hit=10
+Planning Time: 0.865 ms
+Execution Time: 0.556 ms
