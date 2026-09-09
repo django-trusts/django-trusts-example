@@ -264,3 +264,34 @@ After merge, a redeploy can follow (no new Trusts schema).
 - [ ] Do not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS` for this demo.
 - [ ] Set `CSRF_TRUSTED_ORIGINS` on HTTPS deploys (unchanged; still no private hostname defaults).
 
+# Bounded Windows ACL example app (django-trusts#17)
+
+Additive `winfs` app. **No existing example public API or method
+changes.** Project list/create/grants/visibility/team helpers are
+unchanged. Authorization for projects still goes through
+`TrustModelBackend` / Trusts tables.
+
+The Windows evaluator does not use Trust, Trustee, Content, Junction,
+TrustGroup, Role, or Django Group. Owner pre-grant is
+`owner_sid ∈ token → RC|WD` on the example-local descriptor.
+
+## Pin
+
+| | |
+| --- | --- |
+| Previous | `django-trusts` at `8916a760fbe849170e88e3969723b317d0360cd1` |
+| New | `django-trusts` at `a2ab5a13752751ee761990bea778c9f868b2ad6e` (`trusts.context` + `trusts.trustee`) |
+| Replacement | Same git URL, new SHA in `requirements.txt` / `pyproject.toml`. |
+| Affected | `winfs` registers `WinNode` / `WinStream` on the process-wide Context map. Project demo does not call those APIs. |
+| Authorization | Project `has_perm` / `permitted()` unchanged. Windows AccessCheck is a separate one-statement PostgreSQL evaluator. |
+
+Example package version: `0.2.0.dev0` → `0.3.0.dev0`.
+
+Migration-bot checklist:
+
+- [ ] Do not route Project authorization through `winfs.evaluate`.
+- [ ] Do not add Trustee adapters for `WinAce`.
+- [ ] Apply `winfs` migrations; PostgreSQL is required only for AccessCheck tests / `/winfs/` evaluation.
+- [ ] `python manage.py test projects` (SQLite) still passes.
+- [ ] `python manage.py test winfs --settings=example.settings_winfs` on PostgreSQL 14+.
+

@@ -28,6 +28,7 @@
     <header>
         <nav>
             <a href="{% url 'project-list' %}">Projects</a>
+            <a href="{% url 'winfs-volumes' %}">WinFS</a>
             {% if user.is_authenticated %}
                 <a href="{% url 'project-create' %}">New project</a>
             {% endif %}

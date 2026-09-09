@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ node.name }}{% endblock %}
+{% block content %}
+<h1>{{ node.kind }}: {{ node.name }}</h1>
+<p>
+  {% if node.parent %}
+    <a href="{% url 'winfs-node' node.parent_id %}">parent</a>
+  {% else %}
+    <a href="{% url 'winfs-volumes' %}">volumes</a>
+  {% endif %}
+</p>
+<table>
+  <tr><th>Request</th><th>Allowed</th><th>Error</th></tr>
+  {% for name, decision in checks.items %}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ decision.allowed }}</td>
+      <td>{{ decision.error|default:"" }}</td>
+    </tr>
+  {% endfor %}
+</table>
+{% if node.kind == "folder" %}
+  <h2>Authorized children (FILE_READ_DATA / FILE_LIST_DIRECTORY)</h2>
+  <ul>
+    {% for child in children %}
+      <li><a href="{% url 'winfs-node' child.pk %}">{{ child.name }}</a> ({{ child.kind }})</li>
+    {% empty %}
+      <li>None authorized.</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

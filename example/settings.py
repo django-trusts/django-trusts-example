@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "trusts",
     "projects.apps.ProjectsConfig",
+    "winfs.apps.WinfsConfig",
 ]
 
 AUTHENTICATION_BACKENDS = [

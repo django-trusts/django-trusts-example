@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Evaluator unavailable{% endblock %}
+{% block content %}
+<h1>AccessCheck evaluator unavailable</h1>
+<p>This view needs PostgreSQL 14+ (recursive CTE, integer bit ops, fail-closed cycle/depth).</p>
+<p>Node {{ node.pk }} was not evaluated.</p>
+{% endblock %}

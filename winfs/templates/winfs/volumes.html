@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Windows volumes{% endblock %}
+{% block content %}
+<h1>Windows volumes</h1>
+<p>Authorized-object listing for the bounded NTFS ACL example. Outcomes are documentation-derived until verified on a Windows host.</p>
+<ul>
+  {% for volume in volumes %}
+    <li><a href="{% url 'winfs-volume' volume.pk %}">{{ volume.name }}</a></li>
+  {% empty %}
+    <li>No volumes. Run <code>python manage.py seed_winfs</code> on PostgreSQL.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

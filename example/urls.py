@@ -15,4 +15,5 @@ urlpatterns = [
         name="logout",
     ),
     path("", include("projects.urls")),
+    path("winfs/", include("winfs.urls")),
 ]

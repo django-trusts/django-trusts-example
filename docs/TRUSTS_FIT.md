@@ -18,7 +18,7 @@ Inspected for this revision:
 | --- | --- | --- |
 | `django-trusts-example` default `master` | pre-#5 | Demo against Trusts post-#19; group attach implied access. |
 | Historical `DJANGO-TRUSTS-8-Edit-Perm-Pages` / PR #1 | `54e83b76fee2e6e950cec94366adec038ebc1260` | Incomplete Project / collaborator UI on Django 1.8 / Python 2. |
-| `django-trusts` master (PR #30 merge) | `8916a760fbe849170e88e3969723b317d0360cd1` | Installable 1.0.0.dev0 used here (Expr + system checks). |
+| `django-trusts` master (PR #42 merge) | `a2ab5a13752751ee761990bea778c9f868b2ad6e` | Installable 1.0.0.dev0 used here (Context + Trustee registries). |
 
 The historical branch is the useful ancestor for *domain shape* (a `Project`
 `Content` subclass, settlor trusts, collaborators, groups). Core now ships
@@ -93,6 +93,11 @@ the TrustGroup intersection from #23.
   is unset; default False). `manage.py check` must stay clean of
   `trusts.E001` / `trusts.E002`.
 
-Windows ACL work stays on django-trusts#17. Parent Trust inheritance
-and explicit deny stay out of scope. Core V1 `Expr` SQL compilation is
-available; this demo does not register a Project condition.
+Windows ACL validation is the `winfs` app in this repository
+([docs/WINFS_ACL.md](WINFS_ACL.md), django-trusts#17,
+`bounded-winfs-acl-r3`). It registers `WinNode` with
+`Context.register_direct(..., scope_field='security_descriptor')` and
+evaluates AccessCheck in example-local PostgreSQL. It does not use
+`Trust`, Trustee, `Content`, or Django `Group`. Parent Trust inheritance
+stays out of the Project demo. Core V1 `Expr` SQL compilation is
+available; the Project demo does not register a Project condition.

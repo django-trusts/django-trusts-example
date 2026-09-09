@@ -1,8 +1,8 @@
 # Python >=3.12, Django 6.1.x — matches modernized django-trusts 1.0.0.dev0.
-# Trusts is not a published PyPI 1.0; pin latest master (post-#28 Expr
-# registration + #29 / PR #30 system checks; includes TrustGroup from #24).
+# Trusts is not a published PyPI 1.0; pin master through the Context/Trustee
+# registries (merge a2ab5a1, PRs #41/#42) used by the winfs #17 example.
 Django>=6.1,<6.2
-django-trusts @ git+https://github.com/django-trusts/django-trusts.git@8916a760fbe849170e88e3969723b317d0360cd1
+django-trusts @ git+https://github.com/django-trusts/django-trusts.git@a2ab5a13752751ee761990bea778c9f868b2ad6e
 gunicorn>=23.0.0
 # Pure-Python driver: mysqlclient has no Linux wheels and needs client headers
 # the stock Herokuish Python buildpack does not provide.

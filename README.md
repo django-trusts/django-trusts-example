@@ -3,13 +3,13 @@
 Runnable Django 6.1 application that exercises
 [django-trusts](https://github.com/django-trusts/django-trusts) **1.0.0.dev0**
 at revision
-[`8916a760fbe849170e88e3969723b317d0360cd1`](https://github.com/django-trusts/django-trusts/commit/8916a760fbe849170e88e3969723b317d0360cd1)
-(latest `master`: PR [#30](https://github.com/django-trusts/django-trusts/pull/30)
-/ [#29](https://github.com/django-trusts/django-trusts/issues/29) system checks,
-including PR [#28](https://github.com/django-trusts/django-trusts/pull/28) V1
-queryable `Expr` conditions and the earlier TrustGroup intersection).
+[`a2ab5a13752751ee761990bea778c9f868b2ad6e`](https://github.com/django-trusts/django-trusts/commit/a2ab5a13752751ee761990bea778c9f868b2ad6e)
+(`trusts.context` / `trusts.trustee` after PRs [#41](https://github.com/django-trusts/django-trusts/pull/41)
+and [#42](https://github.com/django-trusts/django-trusts/pull/42); includes
+Expr conditions and TrustGroup intersection).
 
-This is the implementation repository for [django-trusts#16](https://github.com/django-trusts/django-trusts/issues/16).
+This is the implementation repository for [django-trusts#16](https://github.com/django-trusts/django-trusts/issues/16)
+and the Windows ACL validation for [django-trusts#17](https://github.com/django-trusts/django-trusts/issues/17).
 It does not close the parent [django-trusts#11](https://github.com/django-trusts/django-trusts/issues/11) tracker.
 
 Requires **Python ≥ 3.12**.
@@ -68,11 +68,39 @@ List pages paginate *after* the Trusts SQL filter (`PROJECT_PAGE_SIZE`,
 default 3) from `Project.objects.permitted`. Direct URLs use the same
 `has_perm` decision as list membership.
 
+## Windows ACL example (`winfs`)
+
+The `winfs` app is the bounded NTFS AccessCheck validation for
+django-trusts#17 (`bounded-winfs-acl-r3`). It uses example-local SID /
+descriptor / `WinNode.parent` tables and
+`Context.register_direct(WinNode, scope_field='security_descriptor')`.
+It does **not** use Trust, Trustee, Content, or Django Group.
+
+The matrix and evaluator semantics are database-neutral. **PostgreSQL
+14+** is the first reference implementation (recursive CTE, integer bit
+ops, fail-closed cycle/depth). See [docs/WINFS_ACL.md](docs/WINFS_ACL.md).
+Vectors remain documentation-derived until verified on a Windows host.
+
+```bash
+python -m pip install "psycopg[binary]>=3.2"
+DATABASE_URL=postgres://USER:PASS@127.0.0.1:5432/DB \
+  python manage.py migrate --settings=example.settings_winfs
+DATABASE_URL=postgres://USER:PASS@127.0.0.1:5432/DB \
+  python manage.py seed_winfs --settings=example.settings_winfs
+DATABASE_URL=postgres://USER:PASS@127.0.0.1:5432/DB \
+  python manage.py test winfs --settings=example.settings_winfs
+```
+
+After `seed_winfs`, open `/winfs/` while signed in (password `demo`).
+SQLite `runserver` can still show the volume list; AccessCheck itself
+returns unavailable unless the database is PostgreSQL.
+
 ## Checks
 
 ```bash
 python manage.py check
 python manage.py test projects
+python manage.py test winfs.tests.test_schema
 ```
 
 `manage.py check` must stay clean of `trusts.E001` / `trusts.E002`
@@ -82,7 +110,9 @@ example does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
 CI runs that suite on Python 3.12–3.14 with Django 6.1 (SQLite), plus
 `check`, `migrate` / `seed_demo`, collectstatic + a WhiteNoise fetch of
 `/static/admin/css/base.css`. A separate job runs `check`, `migrate`,
-`seed_demo`, and a Trusts list-filter query against **MySQL 8**.
+`seed_demo`, and a Trusts list-filter query against **MySQL 8**. The
+`winfs` AccessCheck matrix and inspected plans run against **PostgreSQL
+16**.
 
 ## Dokku
 
@@ -150,7 +180,7 @@ driver is **PyMySQL** (plus `cryptography` for MySQL 8
 
 `requirements.txt` / `pyproject.toml` install Trusts from the git SHA above,
 not from a published PyPI 1.0. Package metadata on that revision is
-`1.0.0.dev0`.
+`1.0.0.dev0`. Example package version is `0.3.0.dev0`.
 
 ## What was reused
 
