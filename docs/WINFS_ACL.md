@@ -29,6 +29,15 @@ It does not traverse `Trust` and is not an all-permissions shortcut.
 
 ## Schema (example-local)
 
+Unique string columns (`WinSid.sid_string`, volume/group/node names) are
+bounded `VARCHAR(255)`, not `TEXT`. MySQL cannot put a unique index on a
+BLOB/TEXT column without a prefix length (errno 1170), and unique
+`VARCHAR` longer than 255 warns (`mysql.W003`). A CHECK that `id <>
+parent_id` is omitted from the portable schema: MySQL refuses CHECK on
+an AUTO_INCREMENT column (errno 3818); `WinNode.clean()` and the
+PostgreSQL parent-guard trigger still refuse self-parents. Semantics
+are unchanged.
+
 `WinSid` is the relational identity. `WinPrincipal` and `WinLocalGroup`
 are typed profiles. `WinSidMember.group` is a real FK to
 `win_local_group` (a principal or well-known SID cannot appear on the

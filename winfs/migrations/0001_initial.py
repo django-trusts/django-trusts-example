@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
             name='WinSid',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('sid_string', models.TextField(unique=True)),
+                ('sid_string', models.CharField(max_length=255, unique=True)),
             ],
             options={
                 'db_table': 'win_sid',
@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
             name='WinVolume',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.TextField(unique=True)),
+                ('name', models.CharField(max_length=255, unique=True)),
             ],
             options={
                 'db_table': 'win_volume',
@@ -38,7 +38,7 @@ class Migration(migrations.Migration):
             name='WinLocalGroup',
             fields=[
                 ('sid', models.OneToOneField(on_delete=django.db.models.deletion.RESTRICT, primary_key=True, related_name='local_group', serialize=False, to='winfs.winsid')),
-                ('name', models.TextField(unique=True)),
+                ('name', models.CharField(max_length=255, unique=True)),
             ],
             options={
                 'db_table': 'win_local_group',
@@ -60,7 +60,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('kind', models.CharField(max_length=8)),
-                ('name', models.TextField()),
+                ('name', models.CharField(max_length=255)),
                 ('parent', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='children', to='winfs.winnode')),
                 ('security_descriptor', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='node', to='winfs.winsecuritydescriptor')),
                 ('volume', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='nodes', to='winfs.winvolume')),
@@ -115,7 +115,7 @@ class Migration(migrations.Migration):
             name='WinStream',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.TextField()),
+                ('name', models.CharField(max_length=255)),
                 ('node', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='streams', to='winfs.winnode')),
             ],
             options={
@@ -138,10 +138,6 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='winnode',
             constraint=models.UniqueConstraint(fields=('volume', 'parent', 'name'), name='win_node_sibling_name'),
-        ),
-        migrations.AddConstraint(
-            model_name='winnode',
-            constraint=models.CheckConstraint(condition=models.Q(('id', models.F('parent')), _negated=True), name='win_node_not_self_parent'),
         ),
         migrations.AddConstraint(
             model_name='winnode',

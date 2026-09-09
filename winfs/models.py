@@ -20,7 +20,10 @@ from .constants import (
 class WinSid(models.Model):
     """Canonical SID row: owner, ACE trustee, and token identity."""
 
-    sid_string = models.TextField(unique=True)
+    # CharField (not TEXT): MySQL cannot UNIQUE-index a BLOB/TEXT column
+    # without a prefix length (errno 1170). 256 covers documented SID
+    # string forms and stays inside InnoDB utf8mb4 key limits.
+    sid_string = models.CharField(max_length=255, unique=True)
 
     class Meta:
         db_table = "win_sid"
@@ -62,7 +65,7 @@ class WinLocalGroup(models.Model):
         primary_key=True,
         related_name="local_group",
     )
-    name = models.TextField(unique=True)
+    name = models.CharField(max_length=255, unique=True)
 
     class Meta:
         db_table = "win_local_group"
@@ -191,7 +194,7 @@ class WinAce(models.Model):
 class WinVolume(models.Model):
     """One filesystem volume. Multiple volumes are allowed; one root each."""
 
-    name = models.TextField(unique=True)
+    name = models.CharField(max_length=255, unique=True)
 
     class Meta:
         db_table = "win_volume"
@@ -216,7 +219,7 @@ class WinNode(models.Model):
         related_name="children",
     )
     kind = models.CharField(max_length=8)
-    name = models.TextField()
+    name = models.CharField(max_length=255)
     security_descriptor = models.OneToOneField(
         WinSecurityDescriptor,
         on_delete=models.RESTRICT,
@@ -232,10 +235,9 @@ class WinNode(models.Model):
                 fields=("volume", "parent", "name"),
                 name="win_node_sibling_name",
             ),
-            models.CheckConstraint(
-                condition=~models.Q(id=models.F("parent")),
-                name="win_node_not_self_parent",
-            ),
+            # MySQL 8 refuses CHECK against an AUTO_INCREMENT column
+            # (errno 3818). Self-parent is enforced in clean() and, on
+            # PostgreSQL, by win_node_parent_guard.
             models.CheckConstraint(
                 condition=models.Q(kind__in=(KIND_FILE, KIND_FOLDER)),
                 name="win_node_kind",
@@ -297,7 +299,7 @@ class WinStream(models.Model):
         on_delete=models.RESTRICT,
         related_name="streams",
     )
-    name = models.TextField()
+    name = models.CharField(max_length=255)
 
     class Meta:
         db_table = "win_stream"

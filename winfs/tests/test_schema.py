@@ -57,3 +57,20 @@ class SchemaTests(TestCase):
     def test_principal_is_not_django_group(self):
         self.assertFalse(hasattr(self.data["eng"], "permissions"))
         self.assertEqual(self.data["alice"].user.username, "alice")
+
+    def test_unique_string_fields_are_varchar_not_text(self):
+        # MySQL 8 errno 1170: UNIQUE on TEXT/BLOB requires a prefix length.
+        from django.db.models import CharField
+
+        from winfs.models import WinLocalGroup, WinNode, WinSid, WinStream, WinVolume
+
+        for model, name in (
+            (WinSid, "sid_string"),
+            (WinLocalGroup, "name"),
+            (WinVolume, "name"),
+            (WinNode, "name"),
+            (WinStream, "name"),
+        ):
+            field = model._meta.get_field(name)
+            self.assertIsInstance(field, CharField, "%s.%s" % (model.__name__, name))
+            self.assertLessEqual(field.max_length, 255)
