@@ -1,20 +1,17 @@
 # django-trusts-example
 
-Runnable Django 6.1 application that exercises
-[django-trusts](https://github.com/django-trusts/django-trusts) **1.0.0.dev0**
-at revision
-[`8916a760fbe849170e88e3969723b317d0360cd1`](https://github.com/django-trusts/django-trusts/commit/8916a760fbe849170e88e3969723b317d0360cd1)
-(latest `master`: PR [#30](https://github.com/django-trusts/django-trusts/pull/30)
-/ [#29](https://github.com/django-trusts/django-trusts/issues/29) system checks,
-including PR [#28](https://github.com/django-trusts/django-trusts/pull/28) V1
-queryable `Expr` conditions and the earlier TrustGroup intersection).
+A runnable Django application showing how persisted relationships become
+object permissions with
+[django-trusts-zero](https://github.com/django-trusts/django-trusts-zero).
 
-This is the implementation repository for [django-trusts#16](https://github.com/django-trusts/django-trusts/issues/16).
-It does not close the parent [django-trusts#11](https://github.com/django-trusts/django-trusts/issues/11) tracker.
+The example keeps authorization in ordinary database rows. Direct grants,
+team membership, role ceilings, and Trust-scoped permissions feed the same
+decision used by object checks and filtered querysets. Lists are filtered in
+SQL before pagination, and unauthorized object URLs fail closed.
 
-Requires **Python ≥ 3.12**.
+## Run it
 
-## Setup
+Requires Python 3.12 or newer and Django 6.1.
 
 ```bash
 python3.12 -m venv .venv
@@ -25,140 +22,117 @@ python manage.py seed_demo
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/ and log in. Every seeded password is `demo`.
+Open <http://127.0.0.1:8000/>. Every seeded account uses the password
+`demo`.
 
-| User | What the seed is for |
+| User | What the account demonstrates |
 | --- | --- |
-| `alice` | Owner of private notes, a shared roadmap, a public changelog, the Acme handbook and appendix (one Trust), and the Acme playbook |
-| `bob` | Trustee with **read** on Shared Roadmap |
-| `carol` | `acme-staff` member; **read** on Acme Handbook and Acme Appendix (shared `org:acme` Trust) and **change** on Acme Playbook (separate Trust) |
-| `dave` | Outsider plus his own notes; reads Alice's work only when it is public |
+| `alice` | Ownership, private projects, direct grants, shared Trusts, and public visibility |
+| `bob` | A direct read-only grant on Shared Roadmap |
+| `carol` | Team-derived access: read on the shared Acme Trust and change on a separate Trust |
+| `dave` | Isolation from Alice's private work, public access, and his own project |
 
-`acme-staff` has the **editor** role as its global ceiling (read + change).
-Local TrustGroup grants choose the subset **per Trust**. Associating the team
-without local rights grants nothing. Handbook and Appendix share `org:acme`,
-so a local change there applies to both. Playbook has its own Trust so the
-same team can have different local rights.
+Try the same object from different accounts. The project list and direct URL
+use the same persisted authorization facts.
 
-## Demo workflows
+## What it demonstrates
 
-1. **Create an object** — as alice (or bob), *New project*. The creator gets
-   read and change trustee rows on a new trust.
-2. **Change visibility** — on a project you can change, toggle public. Public
-   associates `public-readers` and enables **local read** on that Trust
-   (every project on the Trust). Association alone does not grant access;
-   the page only shows **public** when that intersection is effective.
-   Every signed-in account is enrolled in that group (seeded users and
-   accounts created later). Log in as dave — or create another user — to
-   see the list change.
-3. **Grant / revoke trustees** — grant bob or dave read (or read+change), then revoke.
-4. **Teams** — on a project you can change, associate `acme-staff` without
-   granting access (the row shows “grants nothing”). Enable local **Read**
-   and/or **Change** only if those codes are in the team's global ceiling.
-   Those rights apply to **every project on this Trust**. Saving a
-   permission outside the ceiling is rejected and does not mutate.
-   Log in as carol: Handbook and Appendix share read; Playbook has change.
-5. **Another user's view** — log out and in as bob, carol, or dave. The home
-   list is already filtered.
-6. **Unauthorized edits** — as bob, open Alice Private Notes (403) or edit
-   Shared Roadmap (403: bob has read only). As carol, edit Acme Handbook
-   or Acme Appendix (403: local read only) but edit Acme Playbook (allowed).
+### Direct object permissions
 
-List pages paginate *after* the Trusts SQL filter (`PROJECT_PAGE_SIZE`,
-default 3) from `Project.objects.permitted`. Direct URLs use the same
-`has_perm` decision as list membership.
+`Project` subclasses Zero's abstract `Content` model. A direct grant is an
+ordinary `TrustUserPermission` row attached to the project's Trust:
 
-## Checks
+```python
+TrustUserPermission.objects.get_or_create(
+    trust=project.trust,
+    entity=user,
+    permission=project_permission("read_project"),
+)
+```
+
+Django's familiar object-permission API asks the question:
+
+```python
+user.has_perm("projects.read_project", project)
+```
+
+### Database-filtered listings
+
+The list form of the same question stays a QuerySet:
+
+```python
+Project.objects.permitted("read_project", user)
+```
+
+The list view passes that QuerySet to `Paginator`; it never loads an
+unfiltered page and checks each row in Python.
+
+### Trust-scoped teams
+
+`acme-staff` has an editor role as its global ceiling. Each Trust selects the
+local subset that is active there. Acme Handbook and Acme Appendix share one
+Trust and are readable by Carol. Acme Playbook uses another Trust where Carol
+can also change the project. Merely associating a team grants nothing.
+
+### View protection
+
+Direct URLs use the core decorator and Django's object-permission backend:
+
+```python
+from trusts.decorators import K, permission_required
+
+@permission_required("projects.change_project", pk=K("pk"))
+def project_edit(request, pk):
+    ...
+```
+
+## Configuration
+
+The concrete Django app belongs to Zero. `django-trusts` is installed as its
+schema-neutral engine and is not listed separately in `INSTALLED_APPS`.
+
+```python
+INSTALLED_APPS = [
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "trusts.zero.apps.ZeroConfig",
+    "projects.apps.ProjectsConfig",
+]
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "trusts.zero.backends.TrustModelBackend",
+]
+```
+
+The host app contributes its protected model to Zero's configured registry:
+
+```python
+from trusts.zero.apps import CANONICAL_BACKEND_PATH, zero_config
+from trusts.zero.registration import register_zero_content
+
+handle = zero_config().configured_backend(CANONICAL_BACKEND_PATH)
+register_zero_content(handle.registry, Project)
+```
+
+Development dependencies are pinned to a mutually tested core/Zero pair
+until the corresponding releases are published.
+
+## Verify it
 
 ```bash
 python manage.py check
 python manage.py test projects
+python manage.py migrate --noinput
+python manage.py seed_demo
 ```
 
-`manage.py check` must stay clean of `trusts.E001` / `trusts.E002`
-(invalid `Expr` registrations or leftover callable conditions). This
-example does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
+CI covers Python 3.12–3.14 on SQLite and a MySQL 8.4 smoke run. It also
+checks static-file collection and the seeded permission query.
 
-CI runs that suite on Python 3.12–3.14 with Django 6.1 (SQLite), plus
-`check`, `migrate` / `seed_demo`, collectstatic + a WhiteNoise fetch of
-`/static/admin/css/base.css`. A separate job runs `check`, `migrate`,
-`seed_demo`, and a Trusts list-filter query against **MySQL 8**.
+Contributor history and deployment notes live in [DEV.md](DEV.md). Detailed
+authorization boundaries are recorded in
+[docs/TRUSTS_FIT.md](docs/TRUSTS_FIT.md), and behavior changes in
+[migrates.md](migrates.md).
 
-## Dokku
-
-Deploy glue for Dokku with linked MySQL 8 (`DATABASE_URL` from dokku-mysql).
-Django 6.1 requires **MySQL 8.4+**. Local `runserver` still uses SQLite when
-`DATABASE_URL` is unset.
-
-**Do not push this Trusts pin bump to Dokku until the example PR is
-reviewed.** After merge, redeploy, migrate (no new Trusts schema beyond
-the already-applied TrustGroup migration), then re-run `seed_demo` only
-if the database is new or local TrustGroup rows are missing (`seed_demo`
-is idempotent). Do not run `grandfather_trust_group_permissions` for
-this demo.
-
-```bash
-git remote add dokku dokku@your-host:your-app
-git push dokku master
-```
-
-The Procfile `release` phase runs `migrate --noinput` only. Dokku does
-**not** persist release-phase filesystem writes into web containers
-([deployment tasks](https://dokku.com/docs/advanced-usage/deployment-tasks/)).
-
-Static files are collected in a step whose output **is** in the web image:
-
-- The Herokuish **Python buildpack** runs `collectstatic --noinput` at
-  compile time when Django is installed. Leave `DISABLE_COLLECTSTATIC`
-  unset.
-- `app.json` `scripts.dokku.predeploy` also runs
-  `collectstatic --noinput --skip-checks` (Dokku commits predeploy
-  changes to the image). `--skip-checks` avoids needing MySQL during
-  that step.
-
-Do **not** put `seed_demo` on every deploy. After the first successful
-release, seed once:
-
-```bash
-dokku run your-app python manage.py seed_demo
-```
-
-Dokku HTTPS login POSTs need `CSRF_TRUSTED_ORIGINS` (Django 4+). Set it to
-your public origin after TLS is enabled:
-
-```bash
-dokku config:set your-app CSRF_TRUSTED_ORIGINS=https://your-app.example.com
-```
-
-Comma-separated extra origins are allowed. Unset, the list is empty (fine
-for local HTTP `runserver`).
-
-Optional config:
-
-| Var | Default |
-| --- | --- |
-| `SECRET_KEY` | Hard-coded demo key |
-| `CSRF_TRUSTED_ORIGINS` | empty; set via `dokku config:set` for HTTPS |
-
-`ALLOWED_HOSTS` is `*` for this demo. WhiteNoise serves collected static
-files (admin CSS). Gunicorn binds `example.wsgi` on `$PORT`. The MySQL
-driver is **PyMySQL** (plus `cryptography` for MySQL 8
-`caching_sha2_password`) so the stock Python buildpack does not need
-`libmysqlclient` headers.
-
-## Trusts dependency
-
-`requirements.txt` / `pyproject.toml` install Trusts from the git SHA above,
-not from a published PyPI 1.0. Package metadata on that revision is
-`1.0.0.dev0`.
-
-## What was reused
-
-The default branch was a starter only. The historical
-`DJANGO-TRUSTS-8-Edit-Perm-Pages` branch (PR #1) supplied the Project /
-collaborator idea. The app was rewritten for Django 6.1 and the modern
-Trusts API. See [docs/TRUSTS_FIT.md](docs/TRUSTS_FIT.md).
-
-Example behavior changes (including the Trusts pin bump through #28+#30)
-are recorded in [migrates.md](migrates.md). Core library behavior for
-#23 / #28 / #29 is in django-trusts `migrates.md` on the pinned revision.
+Licensed under the BSD 2-Clause License. Copyright BeeDesk, Inc.
