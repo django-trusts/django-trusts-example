@@ -43,12 +43,13 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "trusts",
+    "trusts.zero.apps.ZeroConfig",
     "projects.apps.ProjectsConfig",
 ]
 
 AUTHENTICATION_BACKENDS = [
-    "trusts.backends.TrustModelBackend",
+    "django.contrib.auth.backends.ModelBackend",
+    "trusts.zero.backends.TrustModelBackend",
 ]
 
 MIDDLEWARE = [
