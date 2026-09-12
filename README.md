@@ -121,7 +121,9 @@ The repository includes deployment glue for Dokku with linked MySQL 8
 Local `runserver` uses SQLite when `DATABASE_URL` is unset.
 
 Current development is preserved on the `dev` branch while `master`
-retains the pre-Zero baseline. Deploy `dev` as Dokku's application branch:
+retains the pre-Zero baseline. That shared baseline is tagged
+[`dev_split_core_attempt_1`](https://github.com/django-trusts/django-trusts-example/releases/tag/dev_split_core_attempt_1)
+at `2ee36f93`. Deploy `dev` as Dokku's application branch:
 
 ```bash
 git remote add dokku dokku@your-host:your-app
