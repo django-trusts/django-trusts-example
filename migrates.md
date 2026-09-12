@@ -328,10 +328,10 @@ Migration-bot checklist:
 
 ## Deployment / migration checklist (example)
 
-Do **not** Dokku-deploy this revision until the example PR is reviewed.
-After merge, a redeploy can follow (no new Trusts schema).
+Deploy this revision from the repository's `dev` branch after review; keep `master` on the preserved pre-Zero baseline. The redeploy adds no new Trusts schema.
 
 - [ ] Install Zero at `809d7c1c7dcc145d5b6ee7124e0419fdeb6b8034` and core at `7aedf92720fbfe5db838754f15b24706ac8f512f`.
+- [ ] Deploy with `git push dokku dev:master`; do not advance the repository's preserved `master` branch.
 - [ ] `python manage.py check` (must be clean of `trusts.E001` / `trusts.E002`).
 - [ ] `python manage.py migrate --noinput` (no new Trusts migration expected; loader keys unchanged).
 - [ ] `python manage.py seed_demo` only if the database is new or local TrustGroup rows are missing.
