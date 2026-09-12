@@ -8,3 +8,21 @@ class ProjectsConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401 — enroll new users in public-readers
+        self._register_project_with_zero()
+
+    def _register_project_with_zero(self):
+        """Donate Project as a Zero content terminal (TUP + both TGP plans).
+
+        ZeroConfig registers Trust-as-content only. Host Content subclasses
+        must call register_zero_content or permitted()/has_perm stay empty.
+        """
+        from trusts.zero.apps import CANONICAL_BACKEND_PATH, zero_config
+        from trusts.zero.registration import register_zero_content
+
+        from .models import Project
+
+        registry = zero_config().configured_backend(CANONICAL_BACKEND_PATH).registry
+        if getattr(self, "_zero_project_registry_id", None) is registry:
+            return
+        register_zero_content(registry, Project)
+        self._zero_project_registry_id = registry

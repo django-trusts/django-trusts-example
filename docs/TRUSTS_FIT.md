@@ -5,12 +5,12 @@ the example still has to do. It is not a claim that the declarative
 authorization thesis is complete.
 
 Example behavior changes are recorded in [migrates.md](../migrates.md).
-django-trusts **#23 / PR #24** is the TrustGroup local/global
-intersection. **#28** registers queryable V1 `Expr` conditions via
-`condition_refs()`. **#29 / PR #30** validates those registrations
-with Django system checks (`trusts.E001` / `trusts.E002`). This
-example pins that master tip and exposes TrustGroup in project
-settings. It does not register a Project permission condition.
+django-trusts-zero owns the concrete Trust/Content models, stored
+grants, and `TrustModelBackend`. Schema-neutral django-trusts is the
+library Zero depends on. This example pins Zero PR #20 merge
+`809d7c1c7dcc145d5b6ee7124e0419fdeb6b8034` with core PR #121 merge
+`7aedf92720fbfe5db838754f15b24706ac8f512f`. It does not register a
+Project permission condition.
 
 Inspected for this revision:
 
@@ -18,18 +18,20 @@ Inspected for this revision:
 | --- | --- | --- |
 | `django-trusts-example` default `master` | pre-#5 | Demo against Trusts post-#19; group attach implied access. |
 | Historical `DJANGO-TRUSTS-8-Edit-Perm-Pages` / PR #1 | `54e83b76fee2e6e950cec94366adec038ebc1260` | Incomplete Project / collaborator UI on Django 1.8 / Python 2. |
-| `django-trusts` master (PR #30 merge) | `8916a760fbe849170e88e3969723b317d0360cd1` | Installable 1.0.0.dev0 used here (Expr + system checks). |
+| `django-trusts-zero` (PR #20 merge) | `809d7c1c7dcc145d5b6ee7124e0419fdeb6b8034` | Concrete Trust/Content install used here. |
+| `django-trusts` (PR #121 merge) | `7aedf92720fbfe5db838754f15b24706ac8f512f` | Schema-neutral core library Zero depends on. |
 
 The historical branch is the useful ancestor for *domain shape* (a `Project`
-`Content` subclass, settlor trusts, collaborators, groups). Core now ships
-`Content.grant` / `Content.revoke`, `ContentQuerySet.permitted`, and
-`Trust.objects.filter_by_user_content_perm`. Group-derived access requires
-the TrustGroup intersection from #23.
+`Content` subclass, settlor trusts, collaborators, groups). Zero ships
+`ContentQuerySet.permitted` and `Trust.objects.filter_by_user_content_perm`.
+Trustee and TrustGroup writes are explicit ORM rows (`Content.grant` /
+`Trust.grant_group_permission` are gone). Group-derived access requires
+the TrustGroup local/global intersection.
 
 ## Trusts fits naturally
 
-- `Project(Content)` plus `TrustModelBackend` so `user.has_perm('projects.read_project', project)` is object-level.
-- Creating a dedicated `Trust` per project (settlor = creator) and writing `TrustUserPermission` rows for the owner (`Content.grant`).
+- `Project(Content)` plus `trusts.zero.backends.TrustModelBackend` so `user.has_perm('projects.read_project', project)` is object-level.
+- Creating a dedicated `Trust` per project (settlor = creator) and writing `TrustUserPermission` rows for the owner.
 - Grant / revoke trustees as insert / delete of `TrustUserPermission`.
 - Organization membership as Django `Group` **associated** with a trust
   (`TrustGroup`), with the `editor` role as the **global ceiling** and
@@ -42,7 +44,7 @@ the TrustGroup intersection from #23.
   `UserAdmin.save_related`). Association without the local grant grants
   nothing. `public-readers` is a system-maintained audience for every
   signed-in account.
-- Team mutations via `trusts.authorization` (`associate_group_with_trust`,
+- Team mutations via `trusts.zero.authorization` (`associate_group_with_trust`,
   `set_trust_group_permissions`, `disassociate_group_from_trust`). Writes
   outside the ceiling raise `AuthorizationDenied` and do not mutate.
 - View guards via `trusts.decorators.permission_required` and `K()`.
@@ -57,8 +59,9 @@ the TrustGroup intersection from #23.
   `Project.objects.permitted` (core SQL: trustee **or** TrustGroup
   local/global intersection). Pagination wraps that QuerySet. Inactive and
   anonymous principals are empty, matching `User.has_perm`.
-- **Grant / revoke / visibility / team helpers.** Thin writes to Trusts
-  APIs. Visibility calls `grant_group_permission` for local public read.
+- **Grant / revoke / visibility / team helpers.** Thin writes to Zero
+  tables. Visibility creates `TrustGroup` + `TrustGroupPermission` for
+  local public read.
 - **Create flow.** Allocate a unique slug, then create trust + project +
   owner grants in one transaction. Trusts does not auto-grant the settlor.
 - **Public-readers enrollment.** Application signals, admin `save_related`,
@@ -93,6 +96,7 @@ the TrustGroup intersection from #23.
   is unset; default False). `manage.py check` must stay clean of
   `trusts.E001` / `trusts.E002`.
 
-Windows ACL work stays on django-trusts#17. Parent Trust inheritance
-and explicit deny stay out of scope. Core V1 `Expr` SQL compilation is
-available; this demo does not register a Project condition.
+Windows ACL work stays on django-trusts#17 and is out of this issue.
+Parent Trust inheritance and explicit deny stay out of scope. Core V1
+`Expr` SQL compilation is available; this demo does not register a
+Project condition.
