@@ -14,7 +14,14 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, TransactionTes
 from django.urls import reverse
 
 from trusts.conditions import Expr
-from trusts.models import Content, Role, Trust, TrustGroup, TrustGroupPermission, TrustUserPermission
+from trusts.zero.apps import CANONICAL_BACKEND_PATH, zero_config
+from trusts.zero.models import (
+    Role,
+    Trust,
+    TrustGroup,
+    TrustGroupPermission,
+    TrustUserPermission,
+)
 
 from .demo import seed_demo
 from .grants import (
@@ -31,6 +38,32 @@ from .models import Project
 from .query import editable_projects, readable_projects
 
 User = get_user_model()
+
+
+def zero_registry():
+    return zero_config().configured_backend(CANONICAL_BACKEND_PATH).registry
+
+
+class ExampleZeroBoundaryTests(SimpleTestCase):
+    def test_zero_owns_the_installed_app_and_backend(self):
+        self.assertIn("trusts.zero.apps.ZeroConfig", settings.INSTALLED_APPS)
+        self.assertNotIn("trusts", settings.INSTALLED_APPS)
+        self.assertIn(
+            "trusts.zero.backends.TrustModelBackend",
+            settings.AUTHENTICATION_BACKENDS,
+        )
+        self.assertNotIn(
+            "trusts.backends.TrustModelBackend",
+            settings.AUTHENTICATION_BACKENDS,
+        )
+
+    def test_project_contributes_direct_and_two_group_paths(self):
+        records = zero_registry().plan_for(Project).records
+        self.assertEqual(len(records), 3)
+        self.assertEqual(
+            {record.content_model for record in records},
+            {Project},
+        )
 
 
 class SeededTrustsDemoTests(TestCase):
@@ -296,8 +329,9 @@ class PaginationAndQueryTests(TestCase):
         self.assertTrue(dave.has_perm("projects.read_project", changelog))
         # :own is a V1 Expr on Trust. Project does not register one;
         # public read is a group row, not a condition code.
-        self.assertIsNone(Content.get_permission_condition_func(Project, "own"))
-        self.assertIsNone(Content.get_permission_condition_record(Project, "own"))
+        self.assertIsNone(
+            zero_registry().get_permission_condition_record(Project, "own")
+        )
         self.assertFalse(dave.has_perm("projects.change_project", changelog))
 
 
@@ -842,7 +876,7 @@ class TrustGroupProjectSettingsTests(TestCase):
 
 
 class TrustsPinExprAndCheckTests(SimpleTestCase):
-    """Pinned Trusts master: Expr :own, no callable leftover, check is clean."""
+    """Pinned core/Zero pair: Expr :own and clean system checks."""
 
     def test_legacy_callback_escape_hatch_is_unset(self):
         self.assertFalse(
@@ -850,12 +884,14 @@ class TrustsPinExprAndCheckTests(SimpleTestCase):
         )
 
     def test_trust_own_is_queryable_expr_not_a_callable(self):
-        record = Content.get_permission_condition_record(Trust, "own")
+        registry = zero_registry()
+        record = registry.get_permission_condition_record(Trust, "own")
         self.assertIsNotNone(record)
         self.assertIsInstance(record.expr, Expr)
         self.assertIsNone(record.func)
-        self.assertIsNone(Content.get_permission_condition_record(Project, "own"))
-        self.assertIsNone(Content.get_permission_condition_func(Project, "own"))
+        self.assertIsNone(
+            registry.get_permission_condition_record(Project, "own")
+        )
 
     def test_system_checks_have_no_trusts_condition_errors(self):
         messages = django_checks.run_checks()
