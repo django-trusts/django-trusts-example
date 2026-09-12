@@ -1,11 +1,12 @@
 [project]
 name = "django-trusts-example"
 version = "0.2.0.dev0"
-description = "Runnable Django example that exercises modernized django-trusts"
+description = "Runnable Django example for django-trusts-zero"
 requires-python = ">=3.12"
 dependencies = [
     "Django>=6.1,<6.2",
-    "django-trusts @ git+https://github.com/django-trusts/django-trusts.git@8916a760fbe849170e88e3969723b317d0360cd1",
+    "django-trusts @ git+https://github.com/django-trusts/django-trusts.git@7aedf92720fbfe5db838754f15b24706ac8f512f",
+    "django-trusts-zero @ git+https://github.com/django-trusts/django-trusts-zero.git@809d7c1c7dcc145d5b6ee7124e0419fdeb6b8034",
     "gunicorn>=23.0.0",
     "PyMySQL[rsa]>=1.2.0",
     "dj-database-url>=2.3.0",
