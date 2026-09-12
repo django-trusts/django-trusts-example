@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [dev]
   pull_request:
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install Django 6.1 and Trusts at 8916a76
+      - name: Install Django 6.1 and the pinned core/Zero pair
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Django 6.1 and Trusts at 8916a76
+      - name: Install Django 6.1 and the pinned core/Zero pair
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
