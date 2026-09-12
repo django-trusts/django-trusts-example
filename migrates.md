@@ -1,5 +1,37 @@
 # Migration record (django-trusts-example)
 
+## Move the runnable demo to django-trusts-zero (#10)
+
+The Alice/Bob/Carol/Dave application is the concrete continuation of the
+historical Trust/Content behavior. It now installs
+`trusts.zero.apps.ZeroConfig` and uses
+`trusts.zero.backends.TrustModelBackend`. The schema-neutral core library is
+not a Django application and is not listed separately in `INSTALLED_APPS`.
+
+| | |
+| --- | --- |
+| Previous | The example pinned pre-split core `8916a76`, installed bare `'trusts'`, and imported concrete models and mutation helpers from core paths. |
+| New | Dependencies pin a mutually tested core/Zero pair. Concrete models, backend, and team authorization helpers come from `trusts.zero.*`. Core continues to supply generic decorators and compilation. |
+| Data | The Zero app label remains `trusts`; existing migration keys, tables, content types, permissions, and rows are unchanged. |
+| Writes | Removed `Content.grant` / `revoke` and `Trust.grant_group_permission` calls are ordinary create/delete operations on `TrustUserPermission`, `TrustGroup`, and `TrustGroupPermission`. |
+| Behavior | Seeded visibility, list/direct agreement, Trust-scoped team rights, and authorization-before-pagination stay the same. |
+
+Migration checklist:
+
+- [ ] Replace `'trusts'` with `'trusts.zero.apps.ZeroConfig'` in
+  `INSTALLED_APPS`.
+- [ ] Replace `trusts.backends.TrustModelBackend` with
+  `trusts.zero.backends.TrustModelBackend`.
+- [ ] Move concrete model and authorization imports to `trusts.zero.*`.
+- [ ] Register each concrete host `Content` model with
+  `register_zero_content()` on Zero's configured backend registry.
+- [ ] Replace removed convenience writers with explicit persisted relation
+  writes.
+- [ ] Run `check`, the project tests, a fresh migration/seed, and the MySQL
+  smoke test.
+
+## Pre-split modernization record
+
 This record covers **example application** API and method behavior changes
 while modernizing the demo for django-trusts `1.0.0.dev0`
 (`5bd2a585d3806571f95bebf89c2852cac3649d25`).
@@ -90,7 +122,7 @@ Migration-bot checklist:
 - [ ] After deploy, confirm an HTTPS login POST succeeds.
 - [ ] Do not put private hostnames in source defaults.
 
-## Migration-bot summary
+## Pre-split migration-bot summary
 
 - [ ] Keep `AUTHENTICATION_BACKENDS` as `trusts.backends.TrustModelBackend`.
 - [ ] Apply the four example checklists above.
@@ -263,4 +295,3 @@ After merge, a redeploy can follow (no new Trusts schema).
 - [ ] Keep `AUTHENTICATION_BACKENDS` as `trusts.backends.TrustModelBackend`.
 - [ ] Do not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS` for this demo.
 - [ ] Set `CSRF_TRUSTED_ORIGINS` on HTTPS deploys (unchanged; still no private hostname defaults).
-
