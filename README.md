@@ -1,13 +1,22 @@
 # django-trusts-example
 
-Runnable Django 6.1 application that exercises
-[django-trusts](https://github.com/django-trusts/django-trusts) **1.0.0.dev0**
-at revision
-[`8916a760fbe849170e88e3969723b317d0360cd1`](https://github.com/django-trusts/django-trusts/commit/8916a760fbe849170e88e3969723b317d0360cd1)
-(latest `master`: PR [#30](https://github.com/django-trusts/django-trusts/pull/30)
-/ [#29](https://github.com/django-trusts/django-trusts/issues/29) system checks,
-including PR [#28](https://github.com/django-trusts/django-trusts/pull/28) V1
-queryable `Expr` conditions and the earlier TrustGroup intersection).
+Runnable Django 6.1 **django-trusts-zero** example: Alice/Bob/Carol/Dave
+projects authorized through the historical Trust/Content models.
+
+Installs
+[django-trusts-zero](https://github.com/django-trusts/django-trusts-zero)
+**1.0.0.dev0** at
+[`809d7c1c7dcc145d5b6ee7124e0419fdeb6b8034`](https://github.com/django-trusts/django-trusts-zero/commit/809d7c1c7dcc145d5b6ee7124e0419fdeb6b8034)
+(PR [#20](https://github.com/django-trusts/django-trusts-zero/pull/20) merge).
+Zero depends on schema-neutral
+[django-trusts](https://github.com/django-trusts/django-trusts) **1.0.0.dev3**
+at
+[`7aedf92720fbfe5db838754f15b24706ac8f512f`](https://github.com/django-trusts/django-trusts/commit/7aedf92720fbfe5db838754f15b24706ac8f512f)
+(PR [#121](https://github.com/django-trusts/django-trusts/pull/121) merge).
+Do not pin the pre-split core commit `8916a76`.
+
+Settings use `trusts.zero.apps.ZeroConfig` and
+`trusts.zero.backends.TrustModelBackend`. Do not list bare `'trusts'`.
 
 This is the implementation repository for [django-trusts#16](https://github.com/django-trusts/django-trusts/issues/16).
 It does not close the parent [django-trusts#11](https://github.com/django-trusts/django-trusts/issues/11) tracker.
@@ -82,7 +91,8 @@ example does not set `TRUSTS_ALLOW_LEGACY_PERMISSION_CALLBACKS`.
 CI runs that suite on Python 3.12–3.14 with Django 6.1 (SQLite), plus
 `check`, `migrate` / `seed_demo`, collectstatic + a WhiteNoise fetch of
 `/static/admin/css/base.css`. A separate job runs `check`, `migrate`,
-`seed_demo`, and a Trusts list-filter query against **MySQL 8**.
+`seed_demo`, and a Zero list-filter query against **MySQL 8**. Both jobs
+install the paired Zero/core revisions above.
 
 ## Dokku
 
@@ -90,12 +100,12 @@ Deploy glue for Dokku with linked MySQL 8 (`DATABASE_URL` from dokku-mysql).
 Django 6.1 requires **MySQL 8.4+**. Local `runserver` still uses SQLite when
 `DATABASE_URL` is unset.
 
-**Do not push this Trusts pin bump to Dokku until the example PR is
-reviewed.** After merge, redeploy, migrate (no new Trusts schema beyond
-the already-applied TrustGroup migration), then re-run `seed_demo` only
-if the database is new or local TrustGroup rows are missing (`seed_demo`
-is idempotent). Do not run `grandfather_trust_group_permissions` for
-this demo.
+**Do not push this Zero pin to Dokku until the example PR is
+reviewed.** After merge, redeploy, migrate (Zero keeps loader keys
+`trusts.0001_initial` / `trusts.0002_trustgroup`; no new Trusts schema),
+then re-run `seed_demo` only if the database is new or local TrustGroup
+rows are missing (`seed_demo` is idempotent). Do not run
+`grandfather_trust_group_permissions` for this demo.
 
 ```bash
 git remote add dokku dokku@your-host:your-app
@@ -146,19 +156,22 @@ driver is **PyMySQL** (plus `cryptography` for MySQL 8
 `caching_sha2_password`) so the stock Python buildpack does not need
 `libmysqlclient` headers.
 
-## Trusts dependency
+## Zero / core dependency
 
-`requirements.txt` / `pyproject.toml` install Trusts from the git SHA above,
-not from a published PyPI 1.0. Package metadata on that revision is
-`1.0.0.dev0`.
+`requirements.txt` / `pyproject.toml` install `django-trusts-zero` and
+`django-trusts` from the git SHAs above, not from published PyPI 1.0
+packages. Unpinned `django-trusts` resolves to PyPI 0.10.x and will not
+satisfy Zero's `>=1.0.0.dev3,<2` floor. Package metadata on these
+revisions is Zero `1.0.0.dev0` and core `1.0.0.dev3`.
 
 ## What was reused
 
 The default branch was a starter only. The historical
 `DJANGO-TRUSTS-8-Edit-Perm-Pages` branch (PR #1) supplied the Project /
-collaborator idea. The app was rewritten for Django 6.1 and the modern
-Trusts API. See [docs/TRUSTS_FIT.md](docs/TRUSTS_FIT.md).
+collaborator idea. The app now consumes `trusts.zero.*` (Content,
+authorization helpers, models) on current django-trusts-zero. See
+[docs/TRUSTS_FIT.md](docs/TRUSTS_FIT.md).
 
-Example behavior changes (including the Trusts pin bump through #28+#30)
-are recorded in [migrates.md](migrates.md). Core library behavior for
-#23 / #28 / #29 is in django-trusts `migrates.md` on the pinned revision.
+Example behavior changes (including the move onto Zero) are recorded in
+[migrates.md](migrates.md). Zero / core library behavior is in those
+packages' `migrates.md` on the pinned revisions.
