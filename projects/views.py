@@ -6,7 +6,7 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
 
-from trusts.authorization import (
+from trusts.zero.authorization import (
     AuthorizationDenied,
     associate_group_with_trust,
     disassociate_group_from_trust,
