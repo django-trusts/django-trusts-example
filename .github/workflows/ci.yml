@@ -25,7 +25,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -c "import trusts; import trusts.zero; from importlib.metadata import version; print('django-trusts', version('django-trusts')); print('django-trusts-zero', version('django-trusts-zero'))"
+          # trusts.zero.__init__ reads AUTH_USER_MODEL; do not import it
+          # before Django settings exist. manage.py check proves the import.
+          python -c "from importlib.metadata import version; print('django-trusts', version('django-trusts')); print('django-trusts-zero', version('django-trusts-zero'))"
       - name: Django system checks
         run: python manage.py check
       - name: Integration tests
@@ -70,7 +72,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -c "import trusts; import trusts.zero; from importlib.metadata import version; print('django-trusts', version('django-trusts')); print('django-trusts-zero', version('django-trusts-zero'))"
+          # trusts.zero.__init__ reads AUTH_USER_MODEL; do not import it
+          # before Django settings exist. manage.py check proves the import.
+          python -c "from importlib.metadata import version; print('django-trusts', version('django-trusts')); print('django-trusts-zero', version('django-trusts-zero'))"
       - name: Django system checks
         run: python manage.py check
       - name: Migrate, seed, and permission query
